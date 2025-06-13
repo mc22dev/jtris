@@ -501,6 +501,7 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj):
     best_score = -float('inf')
     best_x = -1
     best_rotation = -1
+    best_landing_y = -1 # Store the landing_y of the best move
 
     # Iterate through all possible rotations for the current piece
     for rotation_idx in range(len(current_piece_obj.shape)):
@@ -542,14 +543,16 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj):
                     best_score = current_move_score
                     best_x = x_col
                     best_rotation = rotation_idx
+                    best_landing_y = landing_y
                 elif current_move_score == best_score:
-                    # Prefer moves that result in lower piece height (less risk)
-                    # This requires landing_y from simulate_place_piece
-                    # For now, just take the first best score found.
-                    # A more sophisticated tie-breaker could be added here.
-                    pass # Keep first best if scores are equal
+                    # Tie-breaking: prefer moves that result in a lower (higher y-value) piece position
+                    if landing_y > best_landing_y: # Higher y means lower on grid
+                        best_x = x_col
+                        best_rotation = rotation_idx
+                        best_landing_y = landing_y
+                        # best_score remains the same
 
-    return best_x, best_rotation, best_score
+    return {'x': best_x, 'rotation': best_rotation, 'score': best_score, 'landing_y': best_landing_y}
 
 
 def main():
@@ -580,11 +583,13 @@ def main():
     soft_drop_active = False; running = True; clock = pygame.time.Clock()
     game_over_sound_played = False
     ai_mode_active = False # True if AI is controlling the game
+    AI_MOVE_DELAY = 0.05 # Seconds between AI moves, adjust for speed (e.g., 0.05 for faster) Initial value, can be changed in loop if needed for dynamic speed.
+    last_ai_move_time = time.time() # Initialize AI move timer
 
 
     while running:
-        AI_MOVE_DELAY = 0.1 # Seconds between AI moves, can be adjusted. Set to 0 for max speed.
-        # last_ai_move_time = time.time() # Initialize AI move timer - This should be outside the main loop or it resets every frame. Moved to main init.
+        # AI_MOVE_DELAY = 0.1 # Removed from here; it's set once at init or can be dynamically changed if needed elsewhere.
+        # last_ai_move_time is initialized before the loop and updated when AI acts or is toggled.
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
 
