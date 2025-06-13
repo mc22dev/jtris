@@ -577,11 +577,7 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj):
 
 # --- Game State Reset Function ---
 def reset_game_state():
-    """
-    Resets all necessary game variables to their initial states for starting a new game.
-    This includes the game grid, pieces, score, level, timers, and control flags.
-    Ensures a clean slate for each new game session, including resetting AI mode.
-    """
+    """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
     current_piece = spawn_piece_at_start()
     next_piece = Piece(0, 0) # Piece class handles random shape_type if None
