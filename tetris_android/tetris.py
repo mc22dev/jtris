@@ -72,6 +72,13 @@ SCORE_FONT_SIZE = 36
 INFO_FONT_SIZE = 30
 TITLE_FONT_SIZE = 24
 GAME_OVER_FONT_SIZE = 72
+
+# Progress Bar UI Constants
+PROGRESS_BAR_WIDTH = 150 # Width of the level progress bar in pixels
+PROGRESS_BAR_HEIGHT = 20 # Height of the level progress bar in pixels
+PROGRESS_BAR_BACKGROUND_COLOR = (50, 50, 50) # Dark Grey
+PROGRESS_BAR_FILL_COLOR = GREEN # Using existing GREEN = (0, 255, 0)
+PROGRESS_BAR_BORDER_COLOR = GREY  # Using existing GREY = (128, 128, 128)
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
 SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
@@ -218,7 +225,7 @@ def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
             pygame.draw.rect(screen, next_piece.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
 
 
-def draw_full_ui(screen, score, level, lines_cleared_total, next_p):
+def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level):
     global SCORE_FONT, INFO_FONT
     if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
     if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -236,9 +243,64 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_p):
 
     lines_surface = INFO_FONT.render(f"Lines: {lines_cleared_total}", True, WHITE)
     screen.blit(lines_surface, (ui_start_x, current_y))
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING * 2
+    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Space after Lines text
+
+    # Draw Level Progress Bar
+    # Text label for progress bar is drawn by draw_level_progress_bar above the bar itself
+    # INFO_FONT is used for the progress text by draw_level_progress_bar
+    progress_text_height = INFO_FONT.get_height() if INFO_FONT else 20 # Estimate if font not loaded
+    progress_bar_rect_y = current_y + progress_text_height + 5 # Y pos for bar, below its text label
+    bar_outer_rect = pygame.Rect(ui_start_x, progress_bar_rect_y, PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT)
+    progress_bar_colors = {"bg": PROGRESS_BAR_BACKGROUND_COLOR, "fill": PROGRESS_BAR_FILL_COLOR, "border": PROGRESS_BAR_BORDER_COLOR}
+    # Ensure INFO_FONT is loaded before calling, or handle inside draw_level_progress_bar if it can be None
+    if INFO_FONT: # Guard call if INFO_FONT might not be loaded (though it should be by this point)
+        draw_level_progress_bar(screen, lines_for_current_level, LINES_PER_LEVEL, bar_outer_rect, progress_bar_colors, INFO_FONT, WHITE) # Call the function to draw the progress bar
+
+    # Update current_y to be below the progress bar for the next UI element
+    current_y = progress_bar_rect_y + PROGRESS_BAR_HEIGHT + UI_INFO_LINE_SPACING * 2 # Update current_y to position elements below the progress bar
 
     draw_next_piece_area(screen, next_p, ui_start_x, current_y)
+
+
+# --- New Drawing Function for Level Progress Bar ---
+def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect, colors, font, text_color):
+    """
+    Draws a progress bar indicating progress towards the next level.
+    Args:
+        screen: Pygame screen surface.
+        current_lines (int): Lines cleared for the current level.
+        lines_needed (int): Total lines needed for the next level (LINES_PER_LEVEL).
+        bar_outer_rect (pygame.Rect): The rectangle defining the outer bounds of the bar.
+        colors (dict): Dictionary with keys 'bg', 'fill', 'border'.
+        font (pygame.font.Font): Font for the text label.
+        text_color (tuple): Color for the text label.
+    """
+    # Draw background
+    pygame.draw.rect(screen, colors['bg'], bar_outer_rect)
+
+    # Calculate fill percentage and width
+    fill_percentage = 0.0
+    if lines_needed > 0: # Avoid division by zero
+        fill_percentage = min(1.0, float(current_lines) / lines_needed) # Cap at 100%
+
+    fill_width = int(fill_percentage * bar_outer_rect.width)
+
+    if fill_width > 0:
+        fill_rect = pygame.Rect(bar_outer_rect.x, bar_outer_rect.y, fill_width, bar_outer_rect.height)
+        pygame.draw.rect(screen, colors['fill'], fill_rect)
+
+    # Draw border (optional)
+    if 'border' in colors: # Allow border to be optional
+        pygame.draw.rect(screen, colors['border'], bar_outer_rect, 1) # 1px border
+
+    # Draw text label (e.g., "Progress: 3/10")
+    progress_text_str = f"Progress: {current_lines}/{lines_needed}"
+    text_surface = font.render(progress_text_str, True, text_color)
+
+    # Position text above the bar, centered horizontally with the bar
+    text_x = bar_outer_rect.centerx - text_surface.get_width() // 2
+    text_y = bar_outer_rect.y - text_surface.get_height() - 2 # 2px padding above bar
+    screen.blit(text_surface, (text_x, text_y))
 
 
 def main():
@@ -257,6 +319,7 @@ def main():
     pygame.display.set_caption(SCREEN_TITLE)
 
     game_grid = create_grid(); score = 0; current_level = 1; total_lines_cleared = 0
+    lines_for_current_level = 0 # Lines cleared since last level up, for progress bar
 
     current_piece = spawn_piece_at_start()
     next_piece = Piece(0,0)
@@ -323,6 +386,7 @@ def main():
                 if lines_this_drop > 0:
                     score += get_score_for_lines(lines_this_drop, current_level)
                     total_lines_cleared += lines_this_drop
+                    lines_for_current_level = total_lines_cleared % LINES_PER_LEVEL # Update progress for current level's bar
                     new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
                     if new_level_calc > current_level:
                         current_level = min(new_level_calc, 100)
@@ -353,6 +417,7 @@ def main():
                     lines_this_drop = check_and_clear_lines(game_grid)
                     if lines_this_drop > 0:
                         score += get_score_for_lines(lines_this_drop, current_level); total_lines_cleared += lines_this_drop
+                        lines_for_current_level = total_lines_cleared % LINES_PER_LEVEL # Update progress for current level's bar
                         new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
                         if new_level_calc > current_level:
                             current_level = min(new_level_calc, 100); current_fall_speed = calculate_fall_speed(current_level)
@@ -377,7 +442,7 @@ def main():
         if not game_over and current_piece:
              draw_current_piece_on_grid(screen, current_piece)
 
-        draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None)
+        draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None, lines_for_current_level)
 
         if game_over:
             game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
