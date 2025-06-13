@@ -1,0 +1,8 @@
+title=Pygame Tetris
+package.name=pygametetris
+package.domain=org.example
+version=1.0
+orientation=landscape
+#wakelock=true # Optional: if game needs to keep screen on, e.g. during long sound playback
+# FOr now, let's keep permissions minimal.
+# fullscreen=true # pgs4a usually handles this by default for Pygame apps.

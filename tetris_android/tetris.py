@@ -190,7 +190,7 @@ def add_garbage_blocks(grid_data, level):
 
 def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
     global TITLE_FONT
-    if TITLE_FONT is None: TITLE_FONT = pygame.font.SysFont("Arial", TITLE_FONT_SIZE)
+    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE)
 
     next_text = TITLE_FONT.render("Next:", True, WHITE)
     screen.blit(next_text, (x_pos, y_pos))
@@ -220,8 +220,8 @@ def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
 
 def draw_full_ui(screen, score, level, lines_cleared_total, next_p):
     global SCORE_FONT, INFO_FONT
-    if SCORE_FONT is None: SCORE_FONT = pygame.font.SysFont("Arial", SCORE_FONT_SIZE)
-    if INFO_FONT is None: INFO_FONT = pygame.font.SysFont("Arial", INFO_FONT_SIZE)
+    if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
+    if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
 
     current_y = UI_INFO_START_Y
     ui_start_x = GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE + UI_INFO_X_OFFSET
@@ -243,8 +243,8 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_p):
 
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
-    SCORE_FONT = pygame.font.SysFont("Arial", SCORE_FONT_SIZE); INFO_FONT = pygame.font.SysFont("Arial", INFO_FONT_SIZE)
-    TITLE_FONT = pygame.font.SysFont("Arial", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.SysFont("Arial", GAME_OVER_FONT_SIZE)
+    SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
+    TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
 
     if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.") # Check isdir
     else:
