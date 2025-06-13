@@ -575,6 +575,84 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj):
 
     return {'x': best_x, 'rotation': best_rotation, 'score': best_score, 'landing_y': best_landing_y}
 
+# --- Input Handling Sub-functions ---
+
+def handle_game_over_inputs(event):
+    """
+    Handles input events when the game is over.
+    Checks for restart or quit commands.
+
+    Args:
+        event (pygame.event.Event): The Pygame event to process.
+
+    Returns:
+        str or None: "RESTART", "QUIT", or None if no relevant action is triggered.
+    """
+    if event.type == pygame.QUIT:
+        return "QUIT"
+    if event.type == pygame.KEYDOWN:
+        if event.key == RESTART_KEY: # RESTART_KEY should be defined globally
+            return "RESTART"
+        if event.key == pygame.K_ESCAPE: # Using ESC as a global quit key too
+            return "QUIT"
+    return None # No relevant action
+
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag):
+    """
+    Handles player inputs for controlling the current piece (movement, rotation, drop).
+    Assumes current_piece exists, game is not over, AI is not active, and piece is not already hard dropping.
+
+    Args:
+        event (pygame.event.Event): The Pygame event to process.
+        current_piece (Piece): The currently falling piece.
+        game_grid (list): The main game grid.
+        soft_drop_active_flag (bool): Current state of soft drop.
+
+    Returns:
+        bool: Updated state of soft_drop_active_flag.
+    """
+    if event.type == pygame.KEYDOWN:
+        # These controls should not be active if the piece is in the middle of an animated hard drop
+        if current_piece.is_hard_dropping_animated:
+            return soft_drop_active_flag
+
+        if event.key == pygame.K_UP:
+            current_piece.rotate(game_grid)
+        elif event.key == pygame.K_LEFT:
+            current_piece.x -= 1
+            if not is_valid_position(current_piece, game_grid):
+                current_piece.x += 1
+            else:
+                play_sound("move")
+        elif event.key == pygame.K_RIGHT:
+            current_piece.x += 1
+            if not is_valid_position(current_piece, game_grid):
+                current_piece.x -= 1
+            else:
+                play_sound("move")
+        elif event.key == pygame.K_DOWN: # Activate soft drop
+            soft_drop_active_flag = True
+        elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
+            # Calculate target_y for hard drop by simulating fall until invalid
+            original_y = current_piece.y
+            temp_piece_for_calc = Piece(current_piece.x, original_y, current_piece.shape_type)
+            temp_piece_for_calc.rotation = current_piece.rotation
+            calculated_target_y = original_y
+            while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
+                calculated_target_y += 1
+
+            current_piece.target_y_for_animated_drop = calculated_target_y
+            current_piece.is_hard_dropping_animated = True
+            soft_drop_active_flag = False # Cancel soft drop if hard drop is initiated
+
+    elif event.type == pygame.KEYUP: # Separate from KEYDOWN to handle soft drop release
+        if event.key == pygame.K_DOWN:
+            # Deactivate soft drop only if it was active and not overridden by hard drop animation
+            if not current_piece.is_hard_dropping_animated:
+                 soft_drop_active_flag = False
+
+    return soft_drop_active_flag
+
 # --- Game State Reset Function ---
 def reset_game_state():
     """Initializes and returns all game state variables for a new game."""
@@ -646,78 +724,48 @@ def main():
 
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: # Handle window close
+            # Top-level quit check (handles window close)
+            if event.type == pygame.QUIT:
                 running = False
-                continue # Skip further event processing if quitting
+                continue # Skip further processing for this event
 
-            # Event handling when the game is over
+            # Game Over State Input Handling
             if game_over:
-                if event.type == pygame.KEYDOWN:
-                    if event.key == RESTART_KEY: # 'R' key pressed
-                        # Reset all game state variables for a new game
-                        game_state = reset_game_state()
-                        game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
-                        score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
-                        lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"] # This makes game_over False, crucial for restart
-                        current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
-                        soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
-                        ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
-                        game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
-                        # Game state is now reset, continue to the next frame to reflect changes
-                        continue
-                    elif event.key == pygame.K_ESCAPE: # 'ESC' key pressed to quit
-                        running = False
-                        continue
-            else: # Game is not over, process normal game play events
-                # AI Mode Toggle Event
-                if event.type == pygame.KEYDOWN:
-                    if event.key == AI_PLAYER_TOGGLE_KEY:
-                        ai_mode_active = not ai_mode_active
-                        print(f"AI Mode Toggled: {ai_mode_active}")
-                        if ai_mode_active:
-                            soft_drop_active = False
-                            if current_piece: current_piece.is_hard_dropping_animated = False
-                            last_ai_move_time = time.time()
+                action = handle_game_over_inputs(event) # Check for restart or quit commands
+                if action == "RESTART":
+                    game_state = reset_game_state() # Reset the entire game state
+                    # Unpack all game state variables from the dictionary for the new game
+                    game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
+                    score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
+                    lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"] # This makes game_over False
+                    current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
+                    soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
+                    ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
+                    game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
+                    continue # Important to process next frame with the new game state
+                elif action == "QUIT":
+                    running = False # Set running to false to exit the main loop
+                    continue # Skip further processing for this event
 
-                # Player input for piece control (only if not game_over and AI not active)
-                if current_piece and not ai_mode_active: # Ensure current_piece exists
-                    if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_UP and not current_piece.is_hard_dropping_animated: current_piece.rotate(game_grid)
-                        elif event.key == pygame.K_LEFT and not current_piece.is_hard_dropping_animated:
-                        current_piece.x -= 1
-                        if not is_valid_position(current_piece, game_grid): current_piece.x += 1
-                        else: play_sound("move")
-                    elif event.key == pygame.K_RIGHT and not (current_piece and current_piece.is_hard_dropping_animated):
-                        current_piece.x += 1
-                        if not is_valid_position(current_piece, game_grid): current_piece.x -= 1
-                        else: play_sound("move")
-                    elif event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated): soft_drop_active = True
-                    elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
-                        if current_piece and not current_piece.is_hard_dropping_animated: # Prevent re-triggering during animation
-                            original_y = current_piece.y # Store current Y before calculation
-                            # Calculate target_y without actually moving the piece for animation yet
+            # Active Gameplay Input Handling (Not Game Over)
+            else:
+                # AI Mode Toggle (handles KEYDOWN for AI_PLAYER_TOGGLE_KEY)
+                if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
+                    ai_mode_active = not ai_mode_active
+                    print(f"AI Mode Toggled: {ai_mode_active}")
+                    if ai_mode_active: # When AI is activated
+                        soft_drop_active = False # Ensure player's soft drop is off
+                        if current_piece: current_piece.is_hard_dropping_animated = False # Cancel any ongoing player hard drop
+                        last_ai_move_time = time.time() # Allow AI to make a move relatively soon
 
-                            # Create a temporary piece for calculation to avoid altering current_piece's state
-                            temp_piece_for_calc = Piece(current_piece.x, original_y, current_piece.shape_type)
-                            temp_piece_for_calc.rotation = current_piece.rotation # Match rotation
-
-                            calculated_target_y = original_y # Start calculation from current y
-                            # Calculate target_y by checking downwards until an invalid position is found
-                            # Loop to find how far down the piece can go from its *original_y*
-                            # check_y_offset is relative to the piece's *current* y, which is original_y for temp_piece_for_calc
-                            while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
-                                calculated_target_y += 1
-
-                            current_piece.target_y_for_animated_drop = calculated_target_y # Store the final landing Y
-                            # current_piece.y is NOT changed here; it remains original_y. Animation handles the visual drop.
-                            current_piece.is_hard_dropping_animated = True # Activate animation state
-                            soft_drop_active = False # Ensure soft drop is not active during animation
-                            # last_fall_time = time.time() # Optional: Reset fall timer for smoother anim start
-
-                if event.type == pygame.KEYUP:
-                    if event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated) and not ai_mode_active: soft_drop_active = False # Disable soft drop deactivation during animation & AI mode
+                # Player-specific controls: only if a piece exists and AI mode is OFF
+                if current_piece and not ai_mode_active:
+                    # Player piece controls are handled by this function (KEYDOWN for movements, KEYUP for K_DOWN release).
+                    # It internally checks for is_hard_dropping_animated to prevent conflicts.
+                    soft_drop_active = handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active)
 
         # --- AI Player Decision Logic ---
+        # This remains outside the event loop, processed each frame if AI is active
         if ai_mode_active and not game_over and current_piece and not current_piece.is_hard_dropping_animated:
             if time.time() - last_ai_move_time > AI_MOVE_DELAY: # Control AI thinking/move frequency
                 grid_copy_for_ai = clone_grid(game_grid) # Give AI a fresh copy of the board
