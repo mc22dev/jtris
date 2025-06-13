@@ -606,6 +606,7 @@ def main():
     AI_MOVE_DELAY = 0.05 # Seconds between AI moves, adjust for speed (e.g., 0.05 for faster) Initial value, can be changed in loop if needed for dynamic speed.
     last_ai_move_time = time.time() # Initialize AI move timer
     game_start_time = time.time() # Record game start time for elapsed timer
+    final_game_time_str = None # Stores the final game time string when game_over is true
 
 
     while running:
@@ -751,9 +752,16 @@ def main():
         if game_over and not game_over_sound_played:
             play_sound("game_over"); game_over_sound_played = True
             current_piece = None
+            if final_game_time_str is None: # Capture time only once
+                final_game_time_str = format_time(time.time() - game_start_time) # Capture final time accurately
 
-        elapsed_total_seconds = time.time() - game_start_time # Calculate elapsed game time each frame
-        formatted_time = format_time(elapsed_total_seconds) # Format the time
+        # Determine the time string to display (live or final frozen time)
+        if game_over and final_game_time_str:
+            formatted_time = final_game_time_str # Game is over and final time captured, use it
+        else:
+            # Game is ongoing, or game over but final time not yet captured in this frame: calculate live time
+            elapsed_total_seconds = time.time() - game_start_time
+            formatted_time = format_time(elapsed_total_seconds)
 
         # Drawing
         screen.fill(BLACK)
@@ -765,6 +773,7 @@ def main():
         draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None, lines_for_current_level, ai_mode_active, formatted_time) # Pass formatted_time (and ai_mode_active)
 
         if game_over:
+            # Display Game Over and Final Score (Time is handled by draw_full_ui)
             game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
             final_score_text = f"Final Score: {score}"
             final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
