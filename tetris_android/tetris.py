@@ -718,9 +718,7 @@ def main():
     game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
 
     running = True; clock = pygame.time.Clock()
-    # AI_MOVE_DELAY is a constant, can remain outside reset logic if not changed, or be part of it.
-    # For now, keeping AI_MOVE_DELAY as is, assuming it_s a global or configurable constant.
-    # AI_MOVE_DELAY = 0.05 # This was already defined as a global-like constant within main before.
+    AI_MOVE_DELAY = 0.05 # Time in seconds between AI moves, adjust for speed
 
     while running:
         for event in pygame.event.get():
