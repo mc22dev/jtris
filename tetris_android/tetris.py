@@ -2,6 +2,7 @@ import pygame
 import random
 import time
 import os
+import copy
 
 # Initialize Pygame
 pygame.init()
@@ -72,6 +73,7 @@ SCORE_FONT_SIZE = 36
 INFO_FONT_SIZE = 30
 TITLE_FONT_SIZE = 24
 GAME_OVER_FONT_SIZE = 72
+AI_PLAYER_TOGGLE_KEY = pygame.K_a # Key to toggle AI player mode
 
 # Progress Bar UI Constants
 PROGRESS_BAR_WIDTH = 150 # Width of the level progress bar in pixels
@@ -303,6 +305,253 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
     screen.blit(text_surface, (text_x, text_y))
 
 
+# --- AI Helper Functions ---
+
+def clone_grid(grid_data):
+    """Creates and returns a deep copy of the given game grid."""
+    return copy.deepcopy(grid_data)
+
+def _get_cleared_lines_and_new_grid(grid_copy_to_check):
+    """
+    Checks for completed lines on a given grid copy and returns the number of lines
+    cleared AND the grid state after clearing those lines.
+    Args:
+        grid_copy_to_check (list): The grid (a list of lists) to check.
+    Returns:
+        tuple: (lines_cleared_count, grid_after_clearing)
+    """
+    lines_cleared_count = 0
+    grid_after_clearing = [row[:] for row in grid_copy_to_check]
+
+    r = GRID_HEIGHT - 1
+    while r >= 0:
+        is_line_full = True
+        for c in range(GRID_WIDTH):
+            if grid_after_clearing[r][c] == 0:
+                is_line_full = False
+                break
+        if is_line_full:
+            lines_cleared_count += 1
+            del grid_after_clearing[r]
+            grid_after_clearing.insert(0, [0 for _ in range(GRID_WIDTH)])
+        else:
+            r -= 1
+
+    return lines_cleared_count, grid_after_clearing
+
+def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation):
+    """
+    Simulates placing a piece at a given x and rotation on a (deep)copy of the grid.
+    Performs a hard drop and calculates the outcome.
+
+    Args:
+        grid_to_simulate_on (list): The grid state (must be a deep copy) to simulate on.
+        piece_to_simulate (Piece): The piece object whose shape and color are used.
+                                   This function creates its own temporary copy for simulation.
+        target_x (int): The target column (piece_s x-coordinate) for placement.
+        target_rotation (int): The target rotation index for the piece.
+
+    Returns:
+        tuple: (resulting_grid_after_clear, lines_cleared, landing_y, is_move_possible)
+               - resulting_grid_after_clear (list or None): Grid state after piece placement AND line clearing. None if placement impossible.
+               - lines_cleared (int): Number of lines cleared by this move.
+               - landing_y (int): The y-coordinate (pivot) where the piece landed. -1 if not possible.
+               - is_move_possible (bool): False if the piece cannot be placed at the given x/rotation (e.g., spawn obstructed).
+    """
+    sim_grid_current_move = clone_grid(grid_to_simulate_on)
+
+    temp_piece = Piece(target_x, 0, piece_to_simulate.shape_type)
+    temp_piece.rotation = target_rotation
+    temp_piece.x = target_x
+
+    min_r_offset = 0
+    current_shape_blocks = temp_piece.shape[temp_piece.rotation]
+    if current_shape_blocks:
+        min_r_offset = min(r for r, c in current_shape_blocks)
+    temp_piece.y = -min_r_offset # Adjust spawn y to be at the very top
+
+    if not is_valid_position(temp_piece, sim_grid_current_move):
+        return None, 0, -1, False
+
+    landing_y = temp_piece.y
+    while True:
+        temp_piece.y += 1
+        if not is_valid_position(temp_piece, sim_grid_current_move):
+            temp_piece.y -= 1
+            landing_y = temp_piece.y
+            break
+
+    for r_offset, c_offset in current_shape_blocks:
+        block_r, block_c = landing_y + r_offset, temp_piece.x + c_offset
+        if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
+            sim_grid_current_move[block_r][block_c] = temp_piece.color
+
+    lines_cleared, grid_after_clear = _get_cleared_lines_and_new_grid(sim_grid_current_move)
+
+    return grid_after_clear, lines_cleared, landing_y, True
+
+
+# --- Heuristic Evaluation Function ---
+
+HEURISTIC_WEIGHTS = {
+    'aggregate_height': -0.510066,
+    'cleared_lines': 0.760666,
+    'holes': -0.35663,
+    'bumpiness': -0.184483,
+    # Additional potential heuristics (can be added and weighted)
+    # 'wells': -0.2, # Sum of depths of wells
+    # 'blockades': -0.3, # Number of empty cells covered by a block
+    # 'edge_blocks': 0.1 # Number of blocks touching the side walls (can be good or bad)
+}
+
+def evaluate_board_state(grid, lines_cleared_by_move):
+    """
+    Evaluates the given board state based on several heuristics.
+    A higher score is better.
+
+    Args:
+        grid (list): The game grid (list of lists) to evaluate.
+        lines_cleared_by_move (int): Number of lines cleared by the move that led to this state.
+
+    Returns:
+        float: The heuristic score for the board state.
+    """
+    score = 0
+
+    # 1. Aggregate Height: Sum of the heights of all columns. Lower is better.
+    #    Height of a column is GRID_HEIGHT minus the row of the highest block in that column.
+    #    If column is empty, its height is 0.
+    aggregate_height = 0
+    column_heights = [0] * GRID_WIDTH
+    for c in range(GRID_WIDTH):
+        for r in range(GRID_HEIGHT):
+            if grid[r][c] != 0:
+                column_heights[c] = GRID_HEIGHT - r
+                break
+        aggregate_height += column_heights[c]
+    score += HEURISTIC_WEIGHTS['aggregate_height'] * aggregate_height
+
+    # 2. Cleared Lines: Number of lines cleared by the last move. More is better.
+    #    This is directly passed as an argument.
+    score += HEURISTIC_WEIGHTS['cleared_lines'] * lines_cleared_by_move
+
+    # 3. Holes: Number of empty cells that have at least one block above them in the same column. Lower is better.
+    holes = 0
+    for c in range(GRID_WIDTH):
+        block_above_found = False
+        for r in range(GRID_HEIGHT): # Iterate from top to bottom
+            if grid[r][c] != 0:
+                block_above_found = True
+            elif block_above_found and grid[r][c] == 0:
+                holes += 1
+    score += HEURISTIC_WEIGHTS['holes'] * holes
+
+    # 4. Bumpiness: Sum of the absolute differences in height between adjacent columns. Lower is better.
+    bumpiness = 0
+    for c in range(GRID_WIDTH - 1):
+        bumpiness += abs(column_heights[c] - column_heights[c+1])
+    score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
+
+    # --- (Optional: Add other heuristics here if defined in HEURISTIC_WEIGHTS) ---
+    # Example: Wells
+    # wells_score = 0
+    # if 'wells' in HEURISTIC_WEIGHTS:
+    #     for c in range(GRID_WIDTH):
+    #         for r in range(GRID_HEIGHT -1, -1, -1): # Iterate from bottom up
+    #             if grid[r][c] == 0: # Found an empty cell
+    #                 # Check left wall
+    #                 left_wall = (c == 0) or (grid[r][c-1] != 0)
+    #                 # Check right wall
+    #                 right_wall = (c == GRID_WIDTH - 1) or (grid[r][c+1] != 0)
+    #                 if left_wall and right_wall:
+    #                     # This is the top of a well, count depth
+    #                     depth = 0
+    #                     for wr in range(r, GRID_HEIGHT):
+    #                         if grid[wr][c] == 0:
+    #                             depth +=1
+    #                         else:
+    #                             break
+    #                     wells_score += depth # Simple sum of depths, could be sum of squares etc.
+    #                 break # Move to next column once top of well or block is found
+    #     score += HEURISTIC_WEIGHTS['wells'] * wells_score
+
+    return score
+
+
+# --- AI: Find Best Move Function ---
+
+def find_best_move(grid_data, current_piece_obj, next_piece_obj):
+    """
+    Finds the best move (column and rotation) for the current piece by simulating
+    all possible placements and evaluating the resulting board states.
+
+    Args:
+        grid_data (list): The current game grid.
+        current_piece_obj (Piece): The current falling piece.
+        next_piece_obj (Piece): The next piece (can be None or used for two-ply lookahead,
+                                 but current implementation is one-ply).
+
+    Returns:
+        tuple: (best_x, best_rotation, best_score)
+               - best_x (int): The target column for the best move.
+               - best_rotation (int): The target rotation for the best move.
+               - best_score (float): The score of the board state resulting from the best move.
+                                     Returns -float('inf') if no moves are possible.
+    """
+    best_score = -float('inf')
+    best_x = -1
+    best_rotation = -1
+
+    # Iterate through all possible rotations for the current piece
+    for rotation_idx in range(len(current_piece_obj.shape)):
+        # Iterate through all possible column placements
+        # Piece x-coordinates are for the pivot. Need to determine valid range.
+        # A simple range is from where leftmost block is at col 0
+        # to where rightmost block is at col GRID_WIDTH - 1
+        # This can be refined, but for now, let's try a broad range of columns.
+        # Min/max c_offset for the current rotation will determine this.
+
+        # Create a temporary piece to check its bounds for each rotation
+        temp_eval_piece = Piece(0, 0, current_piece_obj.shape_type) # x,y are dummy here
+        temp_eval_piece.rotation = rotation_idx
+
+        current_shape_blocks = temp_eval_piece.shape[temp_eval_piece.rotation]
+        min_c_offset_for_shape = 0
+        max_c_offset_for_shape = 0
+        if current_shape_blocks:
+            min_c_offset_for_shape = min(c for r,c in current_shape_blocks)
+            max_c_offset_for_shape = max(c for r,c in current_shape_blocks)
+
+        # Iterate through all possible x positions for the piece's pivot
+        for x_col in range(-min_c_offset_for_shape, GRID_WIDTH - max_c_offset_for_shape):
+            # Simulate placing the piece at (x_col, rotation_idx)
+            # The y-coordinate for simulation starts near the top and hard-drops.
+            # simulate_place_piece handles the hard drop and landing.
+
+            grid_copy = clone_grid(grid_data) # Use a fresh copy for each simulation
+
+            # Pass the original current_piece_obj for its shape_type to simulate_place_piece
+            resulting_grid, lines_cleared, landing_y, is_possible = \
+                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx)
+
+            if is_possible:
+                current_move_score = evaluate_board_state(resulting_grid, lines_cleared)
+
+                # Basic tie-breaking: prefer lower landing height if scores are equal
+                if current_move_score > best_score:
+                    best_score = current_move_score
+                    best_x = x_col
+                    best_rotation = rotation_idx
+                elif current_move_score == best_score:
+                    # Prefer moves that result in lower piece height (less risk)
+                    # This requires landing_y from simulate_place_piece
+                    # For now, just take the first best score found.
+                    # A more sophisticated tie-breaker could be added here.
+                    pass # Keep first best if scores are equal
+
+    return best_x, best_rotation, best_score
+
+
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -330,12 +579,32 @@ def main():
     last_fall_time = time.time(); current_fall_speed = calculate_fall_speed(current_level)
     soft_drop_active = False; running = True; clock = pygame.time.Clock()
     game_over_sound_played = False
+    ai_mode_active = False # True if AI is controlling the game
 
 
     while running:
+        AI_MOVE_DELAY = 0.1 # Seconds between AI moves, can be adjusted. Set to 0 for max speed.
+        # last_ai_move_time = time.time() # Initialize AI move timer - This should be outside the main loop or it resets every frame. Moved to main init.
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
-            if not game_over and current_piece:
+
+            # AI Mode Toggle Event
+            if event.type == pygame.KEYDOWN:
+                if event.key == AI_PLAYER_TOGGLE_KEY:
+                    ai_mode_active = not ai_mode_active
+                    print(f"AI Mode Toggled: {ai_mode_active}")
+                    if ai_mode_active:
+                        # When AI activates, reset any player-induced states for the current piece
+                        soft_drop_active = False
+                        if current_piece:
+                            current_piece.is_hard_dropping_animated = False # Cancel player hard drop
+                        last_ai_move_time = time.time() # Allow AI to make a move soon
+                    # else: # Optional: when AI deactivates, maybe reset piece to top?
+                        # current_piece = spawn_piece_at_start()
+                        # next_piece = Piece(0,0)
+                        # if current_piece and not is_valid_position(current_piece, game_grid): game_over = True; current_piece = None
+
+            if not game_over and current_piece and not ai_mode_active: # Player input for piece control gated if AI active
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_UP and not (current_piece and current_piece.is_hard_dropping_animated): current_piece.rotate(game_grid)
                     elif event.key == pygame.K_LEFT and not (current_piece and current_piece.is_hard_dropping_animated):
@@ -370,7 +639,29 @@ def main():
                             # last_fall_time = time.time() # Optional: Reset fall timer for smoother anim start
 
                 if event.type == pygame.KEYUP:
-                    if event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated): soft_drop_active = False # Disable soft drop deactivation during animation
+                    if event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated) and not ai_mode_active: soft_drop_active = False # Disable soft drop deactivation during animation & AI mode
+
+        # --- AI Player Decision Logic ---
+        if ai_mode_active and not game_over and current_piece and not current_piece.is_hard_dropping_animated:
+            if time.time() - last_ai_move_time > AI_MOVE_DELAY: # Control AI thinking/move frequency
+                grid_copy_for_ai = clone_grid(game_grid) # Give AI a fresh copy of the board
+                # Pass current_piece and next_piece (if AI uses it)
+                # The find_best_move function was updated to return a dictionary
+                best_move_info = find_best_move(grid_copy_for_ai, current_piece, next_piece)
+
+                if best_move_info and best_move_info['x'] != -1: # Check if a valid move was found
+                    # print(f"AI move: r={best_move_info['rotation']}, x={best_move_info['x']}, y_land={best_move_info['landing_y']}, s={best_move_info['score']:.2f}")
+                    current_piece.rotation = best_move_info['rotation']
+                    current_piece.x = best_move_info['x']
+                    # AI always hard drops; use the animation for visual feedback
+                    current_piece.target_y_for_animated_drop = best_move_info['landing_y']
+                    current_piece.is_hard_dropping_animated = True
+                    soft_drop_active = False # Ensure soft drop is off for AI moves
+                else:
+                    # This case implies AI found no valid moves. Should ideally not happen unless game is about to be over.
+                    print("AI: No valid moves found by find_best_move. Setting game over.")
+                    game_over = True # If AI cannot find a move, game is likely over or in an unrecoverable state.
+                last_ai_move_time = time.time() # Reset AI move timer
 
         # --- Animated Hard Drop Logic (executes if is_hard_dropping_animated is True) ---
         if not game_over and current_piece and current_piece.is_hard_dropping_animated:
