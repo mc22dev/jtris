@@ -97,6 +97,8 @@ class Piece:
         self.rotation = 0
         self.x = x # Grid column for current piece, or abstract for next piece
         self.y = y # Grid row for current piece
+        self.is_hard_dropping_animated = False # True if piece is currently in animated hard drop
+        self.target_y_for_animated_drop = -1   # Stores the target Y row for the animated hard drop
 
     def current_shape_coords(self):
         coords = []
@@ -272,39 +274,74 @@ def main():
             if event.type == pygame.QUIT: running = False
             if not game_over and current_piece:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP: current_piece.rotate(game_grid)
-                    elif event.key == pygame.K_LEFT:
+                    if event.key == pygame.K_UP and not (current_piece and current_piece.is_hard_dropping_animated): current_piece.rotate(game_grid)
+                    elif event.key == pygame.K_LEFT and not (current_piece and current_piece.is_hard_dropping_animated):
                         current_piece.x -= 1
                         if not is_valid_position(current_piece, game_grid): current_piece.x += 1
                         else: play_sound("move")
-                    elif event.key == pygame.K_RIGHT:
+                    elif event.key == pygame.K_RIGHT and not (current_piece and current_piece.is_hard_dropping_animated):
                         current_piece.x += 1
                         if not is_valid_position(current_piece, game_grid): current_piece.x -= 1
                         else: play_sound("move")
-                    elif event.key == pygame.K_DOWN: soft_drop_active = True
-                    elif event.key == pygame.K_SPACE:
-                        while is_valid_position(current_piece, game_grid, check_y_offset=1): current_piece.y += 1
-                        add_to_grid(current_piece, game_grid)
-                        lines_this_drop = check_and_clear_lines(game_grid)
-                        if lines_this_drop > 0:
-                            score += get_score_for_lines(lines_this_drop, current_level); total_lines_cleared += lines_this_drop
-                            new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
-                            if new_level_calc > current_level:
-                                current_level = min(new_level_calc, 100); current_fall_speed = calculate_fall_speed(current_level)
-                                play_sound("level_up")
-                                if add_garbage_blocks(game_grid, current_level): game_over = True; current_piece = None
+                    elif event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated): soft_drop_active = True
+                    elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
+                        if current_piece and not current_piece.is_hard_dropping_animated: # Prevent re-triggering during animation
+                            original_y = current_piece.y # Store current Y before calculation
+                            # Calculate target_y without actually moving the piece for animation yet
 
-                        if not game_over:
-                            current_piece = next_piece
-                            current_piece.x = GRID_WIDTH // 2; current_piece.y = 0
-                            next_piece = Piece(0,0)
-                            if not is_valid_position(current_piece, game_grid): game_over = True; current_piece = None
-                        last_fall_time = time.time()
+                            # Create a temporary piece for calculation to avoid altering current_piece's state
+                            temp_piece_for_calc = Piece(current_piece.x, original_y, current_piece.shape_type)
+                            temp_piece_for_calc.rotation = current_piece.rotation # Match rotation
+
+                            calculated_target_y = original_y # Start calculation from current y
+                            # Calculate target_y by checking downwards until an invalid position is found
+                            # Loop to find how far down the piece can go from its *original_y*
+                            # check_y_offset is relative to the piece's *current* y, which is original_y for temp_piece_for_calc
+                            while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
+                                calculated_target_y += 1
+
+                            current_piece.target_y_for_animated_drop = calculated_target_y # Store the final landing Y
+                            # current_piece.y is NOT changed here; it remains original_y. Animation handles the visual drop.
+                            current_piece.is_hard_dropping_animated = True # Activate animation state
+                            soft_drop_active = False # Ensure soft drop is not active during animation
+                            # last_fall_time = time.time() # Optional: Reset fall timer for smoother anim start
 
                 if event.type == pygame.KEYUP:
-                    if event.key == pygame.K_DOWN: soft_drop_active = False
+                    if event.key == pygame.K_DOWN and not (current_piece and current_piece.is_hard_dropping_animated): soft_drop_active = False # Disable soft drop deactivation during animation
 
-        if not game_over and current_piece: # Automatic piece descent
+        # --- Animated Hard Drop Logic (executes if is_hard_dropping_animated is True) ---
+        if not game_over and current_piece and current_piece.is_hard_dropping_animated:
+            current_piece.y += 1 # Move piece down for animation frame
+            # Check if piece reached or passed its target landing position
+            if current_piece.y >= current_piece.target_y_for_animated_drop:
+                current_piece.y = current_piece.target_y_for_animated_drop # Ensure it lands exactly on target
+                current_piece.is_hard_dropping_animated = False # Deactivate animation state
+                # current_piece.target_y_for_animated_drop = -1 # Reset target_y (optional)
+                # --- Piece has landed: Lock piece and handle consequences (lines, score, next piece) ---
+                add_to_grid(current_piece, game_grid)
+                lines_this_drop = check_and_clear_lines(game_grid)
+                if lines_this_drop > 0:
+                    score += get_score_for_lines(lines_this_drop, current_level)
+                    total_lines_cleared += lines_this_drop
+                    new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
+                    if new_level_calc > current_level:
+                        current_level = min(new_level_calc, 100)
+                        current_fall_speed = calculate_fall_speed(current_level)
+                        play_sound("level_up")
+                        if add_garbage_blocks(game_grid, current_level):
+                            game_over = True; current_piece = None
+                if not game_over:
+                    current_piece = next_piece
+                    current_piece.x = GRID_WIDTH // 2; current_piece.y = 0
+                    next_piece = Piece(0,0)
+                    if not is_valid_position(current_piece, game_grid):
+                        game_over = True; current_piece = None
+                last_fall_time = time.time()
+                soft_drop_active = False # Cancel soft drop after any lock
+            # else: piece continues animating downwards next frame
+
+        # Automatic piece descent (handles normal fall and soft drop)
+        if not game_over and current_piece and not current_piece.is_hard_dropping_animated: # Normal piece fall, only if not hard drop animating
             fall_interval = current_fall_speed
             if soft_drop_active: fall_interval = min(current_fall_speed, 0.05)
 
