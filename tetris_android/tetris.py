@@ -197,6 +197,13 @@ def add_garbage_blocks(grid_data, level):
     temp_piece_for_check = Piece(GRID_WIDTH // 2, 0)
     return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
+# --- Time Formatting Function ---
+def format_time(total_seconds):
+    """Formats total seconds into MM:SS string."""
+    minutes = int(total_seconds // 60) # Calculate whole minutes
+    seconds = int(total_seconds % 60) # Calculate remaining seconds
+    return f"{minutes:02d}:{seconds:02d}" # Format as MM:SS with leading zeros
+
 def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
     global TITLE_FONT
     if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE)
@@ -227,7 +234,7 @@ def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
             pygame.draw.rect(screen, next_piece.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
 
 
-def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level):
+def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level, ai_mode_is_active, formatted_time_str): # Added formatted_time_str
     global SCORE_FONT, INFO_FONT
     if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
     if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -245,7 +252,20 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_cu
 
     lines_surface = INFO_FONT.render(f"Lines: {lines_cleared_total}", True, WHITE)
     screen.blit(lines_surface, (ui_start_x, current_y))
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Space after Lines text
+    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING
+
+    # AI Mode Indicator
+    ai_mode_text = "AI Mode: " + ("ON" if ai_mode_is_active else "OFF")
+    ai_status_color = GREEN if ai_mode_is_active else RED
+    ai_surface = INFO_FONT.render(ai_mode_text, True, ai_status_color)
+    screen.blit(ai_surface, (ui_start_x, current_y))
+    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING
+
+    # Display Elapsed Time
+    time_text_surface = INFO_FONT.render(f"Time: {formatted_time_str}", True, WHITE) # Render the time string
+    screen.blit(time_text_surface, (ui_start_x, current_y)) # Blit time to screen
+    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Update y for next element
+
 
     # Draw Level Progress Bar
     # Text label for progress bar is drawn by draw_level_progress_bar above the bar itself
@@ -585,6 +605,7 @@ def main():
     ai_mode_active = False # True if AI is controlling the game
     AI_MOVE_DELAY = 0.05 # Seconds between AI moves, adjust for speed (e.g., 0.05 for faster) Initial value, can be changed in loop if needed for dynamic speed.
     last_ai_move_time = time.time() # Initialize AI move timer
+    game_start_time = time.time() # Record game start time for elapsed timer
 
 
     while running:
@@ -731,6 +752,9 @@ def main():
             play_sound("game_over"); game_over_sound_played = True
             current_piece = None
 
+        elapsed_total_seconds = time.time() - game_start_time # Calculate elapsed game time each frame
+        formatted_time = format_time(elapsed_total_seconds) # Format the time
+
         # Drawing
         screen.fill(BLACK)
         draw_grid_lines(screen)
@@ -738,7 +762,7 @@ def main():
         if not game_over and current_piece:
              draw_current_piece_on_grid(screen, current_piece)
 
-        draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None, lines_for_current_level)
+        draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None, lines_for_current_level, ai_mode_active, formatted_time) # Pass formatted_time (and ai_mode_active)
 
         if game_over:
             game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
