@@ -74,6 +74,7 @@ INFO_FONT_SIZE = 30
 TITLE_FONT_SIZE = 24
 GAME_OVER_FONT_SIZE = 72
 AI_PLAYER_TOGGLE_KEY = pygame.K_a # Key to toggle AI player mode
+RESTART_KEY = pygame.K_r # Key to restart the game after game over
 
 # Progress Bar UI Constants
 PROGRESS_BAR_WIDTH = 150 # Width of the level progress bar in pixels
@@ -574,6 +575,47 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj):
 
     return {'x': best_x, 'rotation': best_rotation, 'score': best_score, 'landing_y': best_landing_y}
 
+# --- Game State Reset Function ---
+def reset_game_state():
+    """
+    Resets all necessary game variables to their initial states for starting a new game.
+    This includes the game grid, pieces, score, level, timers, and control flags.
+    Ensures a clean slate for each new game session, including resetting AI mode.
+    """
+    game_grid = create_grid()
+    current_piece = spawn_piece_at_start()
+    next_piece = Piece(0, 0) # Piece class handles random shape_type if None
+
+    game_over = False
+    if not is_valid_position(current_piece, game_grid):
+        game_over = True
+        current_piece = None # No piece if game over at start
+
+    score = 0
+    current_level = 1
+    total_lines_cleared = 0
+    lines_for_current_level = 0
+
+    current_fall_speed = calculate_fall_speed(current_level)
+    last_fall_time = time.time()
+    soft_drop_active = False
+    game_over_sound_played = False # Reset sound flag
+
+    ai_mode_active = False # Default AI to off
+    last_ai_move_time = time.time() # Initialize AI timer
+
+    game_start_time = time.time() # New game start time
+    final_game_time_str = None # Reset final time string
+
+    return {
+        "game_grid": game_grid, "current_piece": current_piece, "next_piece": next_piece,
+        "score": score, "current_level": current_level, "total_lines_cleared": total_lines_cleared,
+        "lines_for_current_level": lines_for_current_level, "game_over": game_over,
+        "current_fall_speed": current_fall_speed, "last_fall_time": last_fall_time,
+        "soft_drop_active": soft_drop_active, "game_over_sound_played": game_over_sound_played,
+        "ai_mode_active": ai_mode_active, "last_ai_move_time": last_ai_move_time,
+        "game_start_time": game_start_time, "final_game_time_str": final_game_time_str
+    }
 
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
@@ -590,51 +632,62 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption(SCREEN_TITLE)
 
-    game_grid = create_grid(); score = 0; current_level = 1; total_lines_cleared = 0
-    lines_for_current_level = 0 # Lines cleared since last level up, for progress bar
+    # Initial game state setup using the reset function
+    game_state = reset_game_state()
+    # Unpack all game state variables from the dictionary
+    game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
+    score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
+    lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"]
+    current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
+    soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
+    ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
+    game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
 
-    current_piece = spawn_piece_at_start()
-    next_piece = Piece(0,0)
-
-    game_over = False
-    if not is_valid_position(current_piece, game_grid): game_over = True; current_piece = None
-
-    last_fall_time = time.time(); current_fall_speed = calculate_fall_speed(current_level)
-    soft_drop_active = False; running = True; clock = pygame.time.Clock()
-    game_over_sound_played = False
-    ai_mode_active = False # True if AI is controlling the game
-    AI_MOVE_DELAY = 0.05 # Seconds between AI moves, adjust for speed (e.g., 0.05 for faster) Initial value, can be changed in loop if needed for dynamic speed.
-    last_ai_move_time = time.time() # Initialize AI move timer
-    game_start_time = time.time() # Record game start time for elapsed timer
-    final_game_time_str = None # Stores the final game time string when game_over is true
-
+    running = True; clock = pygame.time.Clock()
+    # AI_MOVE_DELAY is a constant, can remain outside reset logic if not changed, or be part of it.
+    # For now, keeping AI_MOVE_DELAY as is, assuming it_s a global or configurable constant.
+    # AI_MOVE_DELAY = 0.05 # This was already defined as a global-like constant within main before.
 
     while running:
-        # AI_MOVE_DELAY = 0.1 # Removed from here; it's set once at init or can be dynamically changed if needed elsewhere.
-        # last_ai_move_time is initialized before the loop and updated when AI acts or is toggled.
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: running = False
+            if event.type == pygame.QUIT: # Handle window close
+                running = False
+                continue # Skip further event processing if quitting
 
-            # AI Mode Toggle Event
-            if event.type == pygame.KEYDOWN:
-                if event.key == AI_PLAYER_TOGGLE_KEY:
-                    ai_mode_active = not ai_mode_active
-                    print(f"AI Mode Toggled: {ai_mode_active}")
-                    if ai_mode_active:
-                        # When AI activates, reset any player-induced states for the current piece
-                        soft_drop_active = False
-                        if current_piece:
-                            current_piece.is_hard_dropping_animated = False # Cancel player hard drop
-                        last_ai_move_time = time.time() # Allow AI to make a move soon
-                    # else: # Optional: when AI deactivates, maybe reset piece to top?
-                        # current_piece = spawn_piece_at_start()
-                        # next_piece = Piece(0,0)
-                        # if current_piece and not is_valid_position(current_piece, game_grid): game_over = True; current_piece = None
-
-            if not game_over and current_piece and not ai_mode_active: # Player input for piece control gated if AI active
+            # Event handling when the game is over
+            if game_over:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP and not (current_piece and current_piece.is_hard_dropping_animated): current_piece.rotate(game_grid)
-                    elif event.key == pygame.K_LEFT and not (current_piece and current_piece.is_hard_dropping_animated):
+                    if event.key == RESTART_KEY: # 'R' key pressed
+                        # Reset all game state variables for a new game
+                        game_state = reset_game_state()
+                        game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
+                        score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
+                        lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"] # This makes game_over False, crucial for restart
+                        current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
+                        soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
+                        ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
+                        game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
+                        # Game state is now reset, continue to the next frame to reflect changes
+                        continue
+                    elif event.key == pygame.K_ESCAPE: # 'ESC' key pressed to quit
+                        running = False
+                        continue
+            else: # Game is not over, process normal game play events
+                # AI Mode Toggle Event
+                if event.type == pygame.KEYDOWN:
+                    if event.key == AI_PLAYER_TOGGLE_KEY:
+                        ai_mode_active = not ai_mode_active
+                        print(f"AI Mode Toggled: {ai_mode_active}")
+                        if ai_mode_active:
+                            soft_drop_active = False
+                            if current_piece: current_piece.is_hard_dropping_animated = False
+                            last_ai_move_time = time.time()
+
+                # Player input for piece control (only if not game_over and AI not active)
+                if current_piece and not ai_mode_active: # Ensure current_piece exists
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_UP and not current_piece.is_hard_dropping_animated: current_piece.rotate(game_grid)
+                        elif event.key == pygame.K_LEFT and not current_piece.is_hard_dropping_animated:
                         current_piece.x -= 1
                         if not is_valid_position(current_piece, game_grid): current_piece.x += 1
                         else: play_sound("move")
@@ -784,6 +837,18 @@ def main():
             screen.blit(game_over_text_surf, text_rect_game_over)
             screen.blit(final_score_surf, text_rect_score)
 
+            # Add Restart and Quit instructions to Game Over screen
+            restart_text_surf = INFO_FONT.render("Press 'R' to Restart", True, WHITE)
+            quit_text_surf = INFO_FONT.render("Press 'ESC' to Quit", True, WHITE)
+
+            y_pos_restart = text_rect_score.bottom + 20 # Position below final score
+            text_rect_restart = restart_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_restart + restart_text_surf.get_height() // 2))
+            screen.blit(restart_text_surf, text_rect_restart)
+
+            y_pos_quit = text_rect_restart.bottom + 10 # Padding
+            text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
+            screen.blit(quit_text_surf, text_rect_quit)
+
         pygame.display.flip()
         clock.tick(60)
 
@@ -795,7 +860,7 @@ def main():
     # until `running` is set to False (e.g., by QUIT event).
     # The sleep here is effectively for console applications or if quit is immediate.
     # For Pygame, the loop itself manages visibility.
-    # if game_over: time.sleep(3) # This might be problematic if pygame is already quit.
+    # No time.sleep(3) here as game over screen is part of the loop.
 
     pygame.mixer.quit()
     pygame.font.quit()
