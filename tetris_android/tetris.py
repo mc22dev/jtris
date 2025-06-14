@@ -733,7 +733,7 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag):
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag):
     action_request = None
 
     for event in events:
@@ -741,6 +741,28 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         if event.type == pygame.QUIT:
             running_flag = False
             continue # Skip further processing for this event
+
+        # Help Screen Toggle (H)
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
+            print(f"K_h detected. help_screen_active_flag before toggle: {help_screen_active_flag}")
+            help_screen_active_flag = not help_screen_active_flag # Toggle the flag
+            if help_screen_active_flag:
+                game_paused_flag = True  # Pause game when help becomes active
+                print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
+            else:
+                game_paused_flag = False # Unpause game when help becomes inactive
+                print("Help screen NEWLY DEACTIVATED. game_paused_flag set to False.")
+            continue # Crucial to skip other inputs for this event
+
+        # Close Help with ESC
+        if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            help_screen_active_flag = False
+            game_paused_flag = False # Unpause game
+            print("Help screen deactivated by ESC")
+            continue
+
+        if help_screen_active_flag: # If help is active, skip all other game inputs
+            continue
 
         # Game Over State Input Handling
         if game_over_flag:
@@ -894,13 +916,16 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "total_paused_duration": total_paused_duration_val,
         "last_fall_time": last_fall_time_val,
         "last_ai_move_time": last_ai_move_time_val,
-        "action_request": action_request
+        "action_request": action_request,
+        "help_screen_active": help_screen_active_flag
     }
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag):
     # --- Game Logic (AI, Piece Movement, Physics) ---
-    # These sections only run if the game is not paused.
-    if not game_paused_flag:
+    # These sections only run if the game is not paused AND help screen is not active.
+    # Note: help_screen_active_flag already sets game_paused_flag = True, so this check might seem redundant for game logic,
+    # but kept for clarity or if pause behavior during help changes.
+    if not game_paused_flag: # game_paused_flag is True if help_screen_active_flag is True
         # --- AI Player Decision Logic ---
         if ai_mode_flag and not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
             if time.time() - last_ai_move_time_val > AI_MOVE_DELAY:
@@ -1015,9 +1040,64 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
         "formatted_time": calculated_formatted_time_str
     }
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj):
+def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
+    help_lines_data = [
+        ("TETRIS - HELP", title_font),
+        ("", section_font), # Spacer
+        ("Keyboard Controls:", section_font),
+        ("  Left Arrow:  Move Piece Left", info_font),
+        ("  Right Arrow: Move Piece Right", info_font),
+        ("  Up Arrow:    Rotate Piece", info_font),
+        ("  Down Arrow:  Soft Drop Piece", info_font),
+        ("  Space Bar:   Hard Drop Piece", info_font),
+        ("  P:           Pause / Resume Game", info_font),
+        ("  A:           Toggle AI Mode", info_font),
+        ("  R:           Restart Game (Game Over)", info_font),
+        ("  H:           Show / Hide Help", info_font),
+        ("  ESC:         Quit Game / Close Help", info_font),
+        ("", section_font), # Spacer
+        ("Joystick Controls (Defaults):", section_font),
+        ("  Analog X / D-Pad X:   Move Left/Right", info_font),
+        ("  Analog Y / D-Pad Y (Down): Soft Drop", info_font),
+        ("  D-Pad Y (Up):         Rotate Piece", info_font),
+        ("  Button 0 (A/X):       Rotate Piece", info_font),
+        ("  Button 1 (B/Circle):  Hard Drop Piece", info_font),
+        ("  Button 7 (Start):     Pause/Resume/Restart", info_font),
+        ("  Button 6 (Select):    Toggle AI Mode", info_font),
+        ("", section_font), # Spacer
+        ("Press 'H' or 'ESC' to close.", info_font)
+    ]
+    rendered_surfaces = []
+    for text, font in help_lines_data:
+        surface = font.render(text, True, text_color)
+        rendered_surfaces.append(surface)
+    return rendered_surfaces
+
+def _draw_help_screen(screen_surface, help_text_surfaces_list):
+    # Draw Overlay
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180)) # Black with ~70% opacity
+    screen_surface.blit(overlay, (0,0))
+
+    # Calculate Total Height and Starting Position
+    total_text_height = 0
+    line_padding = 5 # pixels
+    for surface in help_text_surfaces_list:
+        total_text_height += surface.get_height()
+    total_height_with_padding = total_text_height + (len(help_text_surfaces_list) - 1) * line_padding
+    start_y = (SCREEN_HEIGHT - total_height_with_padding) // 2
+
+    # Blit Text Surfaces
+    current_y = start_y
+    for surface in help_text_surfaces_list:
+        text_x = (SCREEN_WIDTH - surface.get_width()) // 2
+        screen_surface.blit(surface, (text_x, current_y))
+        current_y += surface.get_height() + line_padding
+
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list):
     # Drawing
-    screen_surface.fill(BLACK)
+    screen_surface.fill(BLACK) # Always fill screen first
+    # Regular game drawing
     draw_grid_lines(screen_surface)
     draw_blocks(screen_surface, game_grid_data)
     if not game_over_flag and current_piece_obj:
@@ -1050,11 +1130,15 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
         screen_surface.blit(quit_text_surf, text_rect_quit)
 
-    # Display PAUSED message if game is paused (and not game over)
-    if game_paused_flag and not game_over_flag:
+    # Display PAUSED message if game is paused (and not game over, and help screen not active)
+    if game_paused_flag and not game_over_flag and not help_screen_active_flag:
         pause_text_surface = GAME_OVER_FONT.render("PAUSED", True, YELLOW) # Using GAME_OVER_FONT for size
         text_rect_pause = pause_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         screen_surface.blit(pause_text_surface, text_rect_pause)
+
+    # Draw help screen if active (on top of everything else)
+    if help_screen_active_flag:
+        _draw_help_screen(screen_surface, help_text_surfaces_list) # Ensure this uses the passed parameter
 
     pygame.display.flip()
     if clock_obj: # Ensure clock_obj is provided before ticking
@@ -1064,6 +1148,9 @@ def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
+    # Pre-render help text surfaces (using appropriate fonts)
+    help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
+
 
     if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
     else:
@@ -1097,6 +1184,7 @@ def main():
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
 
     running = True
+    help_screen_active = False # Initialize help screen state
     # AI_MOVE_DELAY is now a global constant.
     formatted_time = "" # Initialize formatted_time
 
@@ -1107,7 +1195,7 @@ def main():
             events, game_over, game_paused, ai_mode_active, soft_drop_active,
             current_piece, game_grid, running,
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
-            joystick, joystick_enabled
+            joystick, joystick_enabled, help_screen_active
         )
 
         running = event_handling_result["running"]
@@ -1120,6 +1208,7 @@ def main():
         last_fall_time = event_handling_result["last_fall_time"]
         last_ai_move_time = event_handling_result["last_ai_move_time"]
         action_request = event_handling_result["action_request"]
+        help_screen_active = event_handling_result["help_screen_active"]
 
         if not running: # If _handle_events set running to False (e.g. QUIT action)
             continue
@@ -1141,7 +1230,8 @@ def main():
             game_grid, score, current_level, total_lines_cleared,
             lines_for_current_level, current_fall_speed, last_fall_time,
             soft_drop_active, game_over_sound_played, last_ai_move_time,
-            game_start_time, final_game_time_str, total_paused_duration, time_at_pause
+            game_start_time, final_game_time_str, total_paused_duration, time_at_pause,
+            help_screen_active # Pass help_screen_active
         )
 
         game_over = game_logic_result["game_over"]
@@ -1164,7 +1254,8 @@ def main():
         _draw_game_screen(
             screen, game_grid, current_piece, next_piece, score, current_level,
             total_lines_cleared, lines_for_current_level, ai_mode_active,
-            formatted_time, game_over, game_paused, clock
+            formatted_time, game_over, game_paused, clock,
+            help_screen_active, help_text_surfaces
         )
 
 
