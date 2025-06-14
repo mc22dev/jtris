@@ -3,6 +3,7 @@ import random
 import time
 import os
 import copy
+import json
 
 # Initialize Pygame
 pygame.init()
@@ -238,7 +239,7 @@ def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
             pygame.draw.rect(screen, next_piece.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
 
 
-def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level, ai_mode_is_active, formatted_time_str): # Added formatted_time_str
+def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level, ai_mode_is_active, formatted_time_str, best_score_data_dict): # Added best_score_data_dict
     global SCORE_FONT, INFO_FONT
     if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
     if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -270,6 +271,12 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_cu
     screen.blit(time_text_surface, (ui_start_x, current_y)) # Blit time to screen
     current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Update y for next element
 
+    # Display Best Score
+    if best_score_data_dict and isinstance(best_score_data_dict.get("score"), int) and best_score_data_dict["score"] > 0:
+        best_score_text = f"Best: {best_score_data_dict['username']} - {best_score_data_dict['score']}"
+        best_score_surface = INFO_FONT.render(best_score_text, True, YELLOW) # Using YELLOW for emphasis
+        screen.blit(best_score_surface, (ui_start_x, current_y))
+        current_y += INFO_FONT.get_height() + UI_INFO_LINE_SPACING
 
     # Draw Level Progress Bar
     # Text label for progress bar is drawn by draw_level_progress_bar above the bar itself
@@ -733,8 +740,36 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag):
+def _load_best_score():
+    filename = "best_score.json"
+    default_score_data = {"username": "N/A", "score": 0, "time_str": "00:00"}
+
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            # Basic validation for expected structure
+            if isinstance(data, dict) and \
+               "username" in data and \
+               "score" in data and \
+               "time_str" in data and \
+               isinstance(data["score"], int): # Ensure score is an int for comparison
+                return data
+            else:
+                print(f"Warning: {filename} has invalid structure. Using defaults.")
+                return copy.deepcopy(default_score_data)
+    except FileNotFoundError:
+        print(f"Info: {filename} not found. A new one will be created if a best score is achieved.")
+        return copy.deepcopy(default_score_data)
+    except json.JSONDecodeError:
+        print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults.")
+        return copy.deepcopy(default_score_data)
+    except Exception as e:
+        print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults.")
+        return copy.deepcopy(default_score_data)
+
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str): # Added game_phase_str, current_username_str
     action_request = None
+    # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
 
     for event in events:
         # Top-level quit check (handles window close)
@@ -764,16 +799,42 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         if help_screen_active_flag: # If help is active, skip all other game inputs
             continue
 
-        # Game Over State Input Handling
-        if game_over_flag:
-            action = handle_game_over_inputs(event) # Check for restart or quit commands
-            if action == "RESTART":
-                action_request = "RESTART"
-                break # Exit event loop, main will handle reset
-            elif action == "QUIT":
-                running_flag = False
-                action_request = "QUIT" # Optional: signal quit explicitly
-                break # Exit event loop, main will terminate
+        # Phase-specific event handling
+        if game_phase_str == "GETTING_USERNAME":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    if current_username_str:
+                        action_request = "SAVE_SCORE"
+                    else:
+                        action_request = "SKIP_SAVE"
+                elif event.key == pygame.K_ESCAPE:
+                    action_request = "SKIP_SAVE"
+                elif event.key == pygame.K_BACKSPACE:
+                    current_username_str = current_username_str[:-1]
+                elif len(current_username_str) < 15 and event.unicode.isalnum():
+                    current_username_str += event.unicode.upper()
+            # In GETTING_USERNAME phase, only process above inputs or global (QUIT, HELP)
+            # No 'continue' here, as the loop should finish for this event,
+            # but the main game inputs below are skipped due to the outer if/elif.
+
+        elif game_phase_str == "PLAYING" or game_phase_str == "GAME_OVER":
+            # Game Over State Input Handling (for "GAME_OVER" phase)
+            if game_over_flag: # This implies game_phase_str == "GAME_OVER"
+                action = None  # Initialize 'action' to None for every event when game_over is true.
+                               # This line MUST be executed for each event if game_over_flag is true.
+
+                if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
+                    # 'action' is potentially updated here by handle_game_over_inputs
+                    action = handle_game_over_inputs(event)
+
+                # Now 'action' is guaranteed to be defined (either None or a string from handle_game_over_inputs)
+                if action == "RESTART":
+                    action_request = "RESTART"
+                    break  # Exit event loop for this frame, main will handle reset
+                elif action == "QUIT":
+                    running_flag = False
+                    # action_request = "QUIT" # Optional, as running_flag = False handles exit
+                    break  # Exit event loop for this frame, main will terminate
 
         # Active Gameplay Input Handling (Not Game Over)
         else:
@@ -917,15 +978,15 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "last_fall_time": last_fall_time_val,
         "last_ai_move_time": last_ai_move_time_val,
         "action_request": action_request,
-        "help_screen_active": help_screen_active_flag
+        "help_screen_active": help_screen_active_flag,
+        "current_username_input": current_username_str, # Return modified username string
+        "game_phase_str": game_phase_str # Return game_phase_str as it's a parameter now
     }
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str):
     # --- Game Logic (AI, Piece Movement, Physics) ---
-    # These sections only run if the game is not paused AND help screen is not active.
-    # Note: help_screen_active_flag already sets game_paused_flag = True, so this check might seem redundant for game logic,
-    # but kept for clarity or if pause behavior during help changes.
-    if not game_paused_flag: # game_paused_flag is True if help_screen_active_flag is True
+    # Game logic should only run during "PLAYING" phase and if not paused (e.g. by help screen).
+    if game_phase_str == "PLAYING" and not game_paused_flag:
         # --- AI Player Decision Logic ---
         if ai_mode_flag and not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
             if time.time() - last_ai_move_time_val > AI_MOVE_DELAY:
@@ -1053,7 +1114,7 @@ def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
         ("  P:           Pause / Resume Game", info_font),
         ("  A:           Toggle AI Mode", info_font),
         ("  R:           Restart Game (Game Over)", info_font),
-        ("  H:           Show / Hide Help", info_font),
+        ("  H:           Show / Hide Help", info_font), # This line is already correct
         ("  ESC:         Quit Game / Close Help", info_font),
         ("", section_font), # Spacer
         ("Joystick Controls (Defaults):", section_font),
@@ -1065,7 +1126,7 @@ def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
         ("  Button 7 (Start):     Pause/Resume/Restart", info_font),
         ("  Button 6 (Select):    Toggle AI Mode", info_font),
         ("", section_font), # Spacer
-        ("Press 'H' or 'ESC' to close.", info_font)
+        ("Press 'H' or 'ESC' to close.", info_font) # This line is also already correct
     ]
     rendered_surfaces = []
     for text, font in help_lines_data:
@@ -1094,44 +1155,63 @@ def _draw_help_screen(screen_surface, help_text_surfaces_list):
         screen_surface.blit(surface, (text_x, current_y))
         current_y += surface.get_height() + line_padding
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list):
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict): # Added best_score_data_dict
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
-    # Regular game drawing
+    # Regular game drawing (grid, current piece, main UI)
     draw_grid_lines(screen_surface)
     draw_blocks(screen_surface, game_grid_data)
-    if not game_over_flag and current_piece_obj:
+    if not game_over_flag and current_piece_obj and game_phase_str != "GETTING_USERNAME": # Don't draw falling piece during name input
          draw_current_piece_on_grid(screen_surface, current_piece_obj)
 
-    # Use next_piece_obj directly, it's None if game_over_flag due to _update_game_state logic for current_piece becoming next_piece
-    draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val, next_piece_obj if not game_over_flag else None, lines_for_current_level_val, ai_mode_flag, formatted_time_str)
+    draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val, next_piece_obj if not game_over_flag else None, lines_for_current_level_val, ai_mode_flag, formatted_time_str, best_score_data_dict) # Pass best_score_data_dict
 
-    if game_over_flag:
-        # Display Game Over and Final Score (Time is handled by draw_full_ui via formatted_time_str)
+    if game_phase_str == "GETTING_USERNAME":
+        # Draw "GAME OVER" and final score first
         game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
-        final_score_text = f"Final Score: {score_val}" # Use score_val
+        final_score_text = f"Final Score: {score_val}"
         final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
-
-        text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() / 2))
-        text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() / 2))
-
+        text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() / 2 - 40)) # Shift up
+        text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() / 2 - 40)) # Shift up
         screen_surface.blit(game_over_text_surf, text_rect_game_over)
         screen_surface.blit(final_score_surf, text_rect_score)
 
-        # Add Restart and Quit instructions to Game Over screen
+        # Then draw the username input prompt
+        prompt_font = INFO_FONT
+        prompt_text_surface = prompt_font.render("New Best! Enter Name (Max 15):", True, WHITE)
+        prompt_rect = prompt_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40))
+        screen_surface.blit(prompt_text_surface, prompt_rect)
+
+        name_input_surface = prompt_font.render(current_username_str, True, YELLOW)
+        name_input_rect = name_input_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+        screen_surface.blit(name_input_surface, name_input_rect)
+
+        if time.time() % 1 < 0.5: # Blinking effect for cursor
+            cursor_surface = prompt_font.render("_", True, YELLOW)
+            # Position cursor next to the text, or at the center if text is empty
+            cursor_x = name_input_rect.right + 2 if current_username_str else name_input_rect.centerx
+            cursor_rect = cursor_surface.get_rect(topleft=(cursor_x, name_input_rect.top))
+            screen_surface.blit(cursor_surface, cursor_rect)
+
+    elif game_over_flag: # Normal "GAME_OVER" phase (not getting username)
+        game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
+        final_score_text = f"Final Score: {score_val}"
+        final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
+        text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() / 2))
+        text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() / 2))
+        screen_surface.blit(game_over_text_surf, text_rect_game_over)
+        screen_surface.blit(final_score_surf, text_rect_score)
         restart_text_surf = INFO_FONT.render("Press 'R' to Restart", True, WHITE)
         quit_text_surf = INFO_FONT.render("Press 'ESC' to Quit", True, WHITE)
-
-        y_pos_restart = text_rect_score.bottom + 20 # Position below final score
+        y_pos_restart = text_rect_score.bottom + 20
         text_rect_restart = restart_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_restart + restart_text_surf.get_height() // 2))
         screen_surface.blit(restart_text_surf, text_rect_restart)
-
-        y_pos_quit = text_rect_restart.bottom + 10 # Padding
+        y_pos_quit = text_rect_restart.bottom + 10
         text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
         screen_surface.blit(quit_text_surf, text_rect_quit)
 
-    # Display PAUSED message if game is paused (and not game over, and help screen not active)
-    if game_paused_flag and not game_over_flag and not help_screen_active_flag:
+    # Display PAUSED message if game is paused (and not game over, and help screen not active, and not getting username)
+    if game_paused_flag and not game_over_flag and not help_screen_active_flag and game_phase_str != "GETTING_USERNAME":
         pause_text_surface = GAME_OVER_FONT.render("PAUSED", True, YELLOW) # Using GAME_OVER_FONT for size
         text_rect_pause = pause_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         screen_surface.blit(pause_text_surface, text_rect_pause)
@@ -1150,6 +1230,7 @@ def main():
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
     # Pre-render help text surfaces (using appropriate fonts)
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
+    best_score_data = _load_best_score()
 
 
     if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
@@ -1184,9 +1265,11 @@ def main():
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
 
     running = True
-    help_screen_active = False # Initialize help screen state
-    # AI_MOVE_DELAY is now a global constant.
-    formatted_time = "" # Initialize formatted_time
+    running = True
+    help_screen_active = False
+    game_phase = "PLAYING"
+    current_username_input = ""
+    formatted_time = ""
 
     while running:
         # Event Handling
@@ -1195,7 +1278,8 @@ def main():
             events, game_over, game_paused, ai_mode_active, soft_drop_active,
             current_piece, game_grid, running,
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
-            joystick, joystick_enabled, help_screen_active
+            joystick, joystick_enabled, help_screen_active,
+            game_phase, current_username_input
         )
 
         running = event_handling_result["running"]
@@ -1209,9 +1293,11 @@ def main():
         last_ai_move_time = event_handling_result["last_ai_move_time"]
         action_request = event_handling_result["action_request"]
         help_screen_active = event_handling_result["help_screen_active"]
+        current_username_input = event_handling_result["current_username_input"]
+        # game_phase is now primarily managed by main based on action_request or game_over state changes
 
-        if not running: # If _handle_events set running to False (e.g. QUIT action)
-            continue
+        if not running:
+            break
 
         if action_request == "RESTART":
             game_state_dict = _handle_restart_action()
@@ -1221,17 +1307,30 @@ def main():
              game_over_sound_played, ai_mode_active, last_ai_move_time,
              game_start_time, final_game_time_str, game_paused,
              time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
-            formatted_time = "" # Reset formatted_time on restart
+            formatted_time = ""
+            help_screen_active = False
+            game_phase = "PLAYING"
+            current_username_input = ""
             continue
 
-        # Game Logic Update
+        if action_request == "SAVE_SCORE":
+            _save_best_score(current_username_input, score, final_game_time_str if final_game_time_str else formatted_time)
+            best_score_data = _load_best_score()
+            game_phase = "GAME_OVER"
+            current_username_input = ""
+        elif action_request == "SKIP_SAVE":
+            game_phase = "GAME_OVER"
+            current_username_input = ""
+
+        prev_game_over = game_over
+
         game_logic_result = _update_game_state(
             game_over, game_paused, ai_mode_active, current_piece, next_piece,
             game_grid, score, current_level, total_lines_cleared,
             lines_for_current_level, current_fall_speed, last_fall_time,
             soft_drop_active, game_over_sound_played, last_ai_move_time,
             game_start_time, final_game_time_str, total_paused_duration, time_at_pause,
-            help_screen_active # Pass help_screen_active
+            help_screen_active, game_phase
         )
 
         game_over = game_logic_result["game_over"]
@@ -1244,21 +1343,30 @@ def main():
         lines_for_current_level = game_logic_result["lines_for_current_level"]
         current_fall_speed = game_logic_result["current_fall_speed"]
         last_fall_time = game_logic_result["last_fall_time"]
-        soft_drop_active = game_logic_result["soft_drop_active"] # Ensure this is updated if AI takes over
+        soft_drop_active = game_logic_result["soft_drop_active"]
         game_over_sound_played = game_logic_result["game_over_sound_played"]
         last_ai_move_time = game_logic_result["last_ai_move_time"]
-        final_game_time_str = game_logic_result["final_game_time_str"]
+        final_game_time_str = game_logic_result["final_game_time_str"] # This is set in _update_game_state
         formatted_time = game_logic_result["formatted_time"]
+
+        # Game Phase Transition Logic (after game logic updates game_over)
+        if game_over and not prev_game_over: # Game just ended
+            if score > best_score_data["score"]:
+                game_phase = "GETTING_USERNAME"
+                current_username_input = "" # Ensure it's reset
+                # game_paused is likely already true if help screen was used, or should be set
+                # game_paused = True # Ensure game is paused for name input
+            else:
+                game_phase = "GAME_OVER"
 
         # Drawing
         _draw_game_screen(
             screen, game_grid, current_piece, next_piece, score, current_level,
             total_lines_cleared, lines_for_current_level, ai_mode_active,
             formatted_time, game_over, game_paused, clock,
-            help_screen_active, help_text_surfaces
+            help_screen_active, help_text_surfaces,
+            game_phase, current_username_input, best_score_data # Pass best_score_data
         )
-
-
     pygame.mixer.quit()
     pygame.font.quit()
     pygame.quit()
