@@ -76,6 +76,7 @@ GAME_OVER_FONT_SIZE = 72
 AI_PLAYER_TOGGLE_KEY = pygame.K_a # Key to toggle AI player mode
 RESTART_KEY = pygame.K_r # Key to restart the game after game over
 PAUSE_KEY = pygame.K_p # Key to pause/unpause the game
+AI_MOVE_DELAY = 0.05 # Time in seconds between AI moves, adjust for speed
 
 # Progress Bar UI Constants
 PROGRESS_BAR_WIDTH = 150 # Width of the level progress bar in pixels
@@ -731,12 +732,243 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val):
+    action_request = None
+
+    for event in events:
+        # Top-level quit check (handles window close)
+        if event.type == pygame.QUIT:
+            running_flag = False
+            continue # Skip further processing for this event
+
+        # Game Over State Input Handling
+        if game_over_flag:
+            action = handle_game_over_inputs(event) # Check for restart or quit commands
+            if action == "RESTART":
+                action_request = "RESTART"
+                break # Exit event loop, main will handle reset
+            elif action == "QUIT":
+                running_flag = False
+                action_request = "QUIT" # Optional: signal quit explicitly
+                break # Exit event loop, main will terminate
+
+        # Active Gameplay Input Handling (Not Game Over)
+        else:
+            # Pause Toggle (handles KEYDOWN for PAUSE_KEY)
+            if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
+                game_paused_flag = not game_paused_flag
+                if game_paused_flag:
+                    time_at_pause_val = time.time() # Record time when paused
+                    print("Game Paused")
+                    # play_sound("pause") # Optional: if pause sound exists
+                else: # Game is unpausing
+                    # Add the duration of this pause to total_paused_duration
+                    total_paused_duration_val += time.time() - time_at_pause_val
+                    # Adjust last_fall_time and last_ai_move_time to prevent sudden catch-up
+                    last_fall_time_val = time.time()
+                    last_ai_move_time_val = time.time()
+                    print("Game Resumed")
+                    # play_sound("unpause") # Optional: if unpause sound exists
+
+            # Process other game inputs only if not paused
+            if not game_paused_flag:
+                # AI Mode Toggle (handles KEYDOWN for AI_PLAYER_TOGGLE_KEY)
+                if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
+                    ai_mode_flag = not ai_mode_flag
+                    print(f"AI Mode Toggled: {ai_mode_flag}")
+                    if ai_mode_flag: # When AI is activated
+                        soft_drop_flag = False # Ensure player's soft drop is off
+                        if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False # Cancel any ongoing player hard drop
+                        last_ai_move_time_val = time.time() # Allow AI to make a move relatively soon
+
+                # Player-specific controls: only if a piece exists and AI mode is OFF
+                if current_piece_obj and not ai_mode_flag:
+                    # Player piece controls are handled by this function (KEYDOWN for movements, KEYUP for K_DOWN release).
+                    # It internally checks for is_hard_dropping_animated to prevent conflicts.
+                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag)
+
+    return {
+        "running": running_flag,
+        "game_paused": game_paused_flag,
+        "ai_mode_active": ai_mode_flag,
+        "soft_drop_active": soft_drop_flag,
+        "current_piece": current_piece_obj, # Return potentially modified piece
+        "time_at_pause": time_at_pause_val,
+        "total_paused_duration": total_paused_duration_val,
+        "last_fall_time": last_fall_time_val,
+        "last_ai_move_time": last_ai_move_time_val,
+        "action_request": action_request
+    }
+
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val):
+    # --- Game Logic (AI, Piece Movement, Physics) ---
+    # These sections only run if the game is not paused.
+    if not game_paused_flag:
+        # --- AI Player Decision Logic ---
+        if ai_mode_flag and not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
+            if time.time() - last_ai_move_time_val > AI_MOVE_DELAY:
+                grid_copy_for_ai = clone_grid(game_grid_data)
+                best_move_info = find_best_move(grid_copy_for_ai, current_piece_obj, next_piece_obj)
+
+                if best_move_info and best_move_info['x'] != -1:
+                    current_piece_obj.rotation = best_move_info['rotation']
+                    current_piece_obj.x = best_move_info['x']
+                    current_piece_obj.target_y_for_animated_drop = best_move_info['landing_y']
+                    current_piece_obj.is_hard_dropping_animated = True
+                    soft_drop_flag = False
+                else:
+                    print("AI: No valid moves found by find_best_move. Setting game over.")
+                    game_over_flag = True
+                last_ai_move_time_val = time.time()
+
+        # --- Animated Hard Drop Logic ---
+        if not game_over_flag and current_piece_obj and current_piece_obj.is_hard_dropping_animated:
+            current_piece_obj.y += 1
+            if current_piece_obj.y >= current_piece_obj.target_y_for_animated_drop:
+                current_piece_obj.y = current_piece_obj.target_y_for_animated_drop
+                current_piece_obj.is_hard_dropping_animated = False
+                add_to_grid(current_piece_obj, game_grid_data)
+                lines_this_drop = check_and_clear_lines(game_grid_data)
+                if lines_this_drop > 0:
+                    score_val += get_score_for_lines(lines_this_drop, current_level_val)
+                    total_lines_cleared_val += lines_this_drop
+                    lines_for_current_level_val = total_lines_cleared_val % LINES_PER_LEVEL
+                    new_level_calc = (total_lines_cleared_val // LINES_PER_LEVEL) + 1
+                    if new_level_calc > current_level_val:
+                        current_level_val = min(new_level_calc, 100)
+                        current_fall_speed_val = calculate_fall_speed(current_level_val)
+                        play_sound("level_up")
+                        if add_garbage_blocks(game_grid_data, current_level_val):
+                            game_over_flag = True; current_piece_obj = None
+                if not game_over_flag:
+                    current_piece_obj = next_piece_obj
+                    if current_piece_obj: # Ensure current_piece_obj is not None before accessing attributes
+                        current_piece_obj.x = GRID_WIDTH // 2; current_piece_obj.y = 0
+                    next_piece_obj = Piece(0,0)
+                    if not is_valid_position(current_piece_obj, game_grid_data): # current_piece_obj could be None here if game over from garbage
+                        game_over_flag = True; current_piece_obj = None
+                last_fall_time_val = time.time()
+                soft_drop_flag = False
+
+        # --- Automatic Piece Descent ---
+        if not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
+            fall_interval = current_fall_speed_val
+            if soft_drop_flag: fall_interval = min(current_fall_speed_val, 0.05)
+
+            if time.time() - last_fall_time_val > fall_interval:
+                current_piece_obj.y += 1
+                if not is_valid_position(current_piece_obj, game_grid_data):
+                    current_piece_obj.y -= 1
+                    add_to_grid(current_piece_obj, game_grid_data)
+                    lines_this_drop = check_and_clear_lines(game_grid_data)
+                    if lines_this_drop > 0:
+                        score_val += get_score_for_lines(lines_this_drop, current_level_val)
+                        total_lines_cleared_val += lines_this_drop
+                        lines_for_current_level_val = total_lines_cleared_val % LINES_PER_LEVEL
+                        new_level_calc = (total_lines_cleared_val // LINES_PER_LEVEL) + 1
+                        if new_level_calc > current_level_val:
+                            current_level_val = min(new_level_calc, 100)
+                            current_fall_speed_val = calculate_fall_speed(current_level_val)
+                            play_sound("level_up")
+                            if add_garbage_blocks(game_grid_data, current_level_val):
+                                game_over_flag = True; current_piece_obj = None
+                    if not game_over_flag:
+                        current_piece_obj = next_piece_obj
+                        if current_piece_obj: # Ensure current_piece_obj is not None
+                            current_piece_obj.x = GRID_WIDTH // 2; current_piece_obj.y = 0
+                        next_piece_obj = Piece(0,0)
+                        if not is_valid_position(current_piece_obj, game_grid_data): # current_piece_obj could be None
+                            game_over_flag = True; current_piece_obj = None
+                last_fall_time_val = time.time()
+
+    # --- Game Over State Update (after all game logic for the frame) ---
+    if game_over_flag and not game_over_sound_played_flag:
+        play_sound("game_over"); game_over_sound_played_flag = True
+        current_piece_obj = None # Ensure no piece is active
+        if final_game_time_str_val is None:
+            current_elapsed_time = time.time() - game_start_time_val - total_paused_duration_val
+            final_game_time_str_val = format_time(max(0, current_elapsed_time))
+
+    # Determine the time string to display (live or final frozen time)
+    calculated_formatted_time_str = ""
+    if game_over_flag and final_game_time_str_val:
+        calculated_formatted_time_str = final_game_time_str_val
+    elif game_paused_flag:
+        elapsed_at_pause_moment = (time_at_pause_val - game_start_time_val) - total_paused_duration_val
+        calculated_formatted_time_str = format_time(max(0, elapsed_at_pause_moment))
+    else:
+        current_elapsed_seconds = (time.time() - game_start_time_val) - total_paused_duration_val
+        calculated_formatted_time_str = format_time(max(0, current_elapsed_seconds))
+
+    return {
+        "game_over": game_over_flag,
+        "current_piece": current_piece_obj,
+        "next_piece": next_piece_obj,
+        "game_grid": game_grid_data,
+        "score": score_val,
+        "current_level": current_level_val,
+        "total_lines_cleared": total_lines_cleared_val,
+        "lines_for_current_level": lines_for_current_level_val,
+        "current_fall_speed": current_fall_speed_val,
+        "last_fall_time": last_fall_time_val,
+        "soft_drop_active": soft_drop_flag,
+        "game_over_sound_played": game_over_sound_played_flag,
+        "last_ai_move_time": last_ai_move_time_val,
+        "final_game_time_str": final_game_time_str_val,
+        "formatted_time": calculated_formatted_time_str
+    }
+
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj):
+    # Drawing
+    screen_surface.fill(BLACK)
+    draw_grid_lines(screen_surface)
+    draw_blocks(screen_surface, game_grid_data)
+    if not game_over_flag and current_piece_obj:
+         draw_current_piece_on_grid(screen_surface, current_piece_obj)
+
+    # Use next_piece_obj directly, it's None if game_over_flag due to _update_game_state logic for current_piece becoming next_piece
+    draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val, next_piece_obj if not game_over_flag else None, lines_for_current_level_val, ai_mode_flag, formatted_time_str)
+
+    if game_over_flag:
+        # Display Game Over and Final Score (Time is handled by draw_full_ui via formatted_time_str)
+        game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
+        final_score_text = f"Final Score: {score_val}" # Use score_val
+        final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
+
+        text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() / 2))
+        text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() / 2))
+
+        screen_surface.blit(game_over_text_surf, text_rect_game_over)
+        screen_surface.blit(final_score_surf, text_rect_score)
+
+        # Add Restart and Quit instructions to Game Over screen
+        restart_text_surf = INFO_FONT.render("Press 'R' to Restart", True, WHITE)
+        quit_text_surf = INFO_FONT.render("Press 'ESC' to Quit", True, WHITE)
+
+        y_pos_restart = text_rect_score.bottom + 20 # Position below final score
+        text_rect_restart = restart_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_restart + restart_text_surf.get_height() // 2))
+        screen_surface.blit(restart_text_surf, text_rect_restart)
+
+        y_pos_quit = text_rect_restart.bottom + 10 # Padding
+        text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
+        screen_surface.blit(quit_text_surf, text_rect_quit)
+
+    # Display PAUSED message if game is paused (and not game over)
+    if game_paused_flag and not game_over_flag:
+        pause_text_surface = GAME_OVER_FONT.render("PAUSED", True, YELLOW) # Using GAME_OVER_FONT for size
+        text_rect_pause = pause_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen_surface.blit(pause_text_surface, text_rect_pause)
+
+    pygame.display.flip()
+    if clock_obj: # Ensure clock_obj is provided before ticking
+        clock_obj.tick(60)
+
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
 
-    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.") # Check isdir
+    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
     else:
         SOUND_EFFECTS["move"]=load_sound("move.wav"); SOUND_EFFECTS["rotate"]=load_sound("rotate.wav")
         SOUND_EFFECTS["drop"]=load_sound("drop.wav"); SOUND_EFFECTS["line_clear"]=load_sound("line_clear.wav")
@@ -745,237 +977,87 @@ def main():
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption(SCREEN_TITLE)
+    clock = pygame.time.Clock() # Moved clock initialization here as it's used by _draw_game_screen
 
-    # Initial game state setup using the reset function
-    game_state = reset_game_state()
+    # Initial game state setup
+    game_state_dict = reset_game_state()
     (game_grid, current_piece, next_piece, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
      current_fall_speed, last_fall_time, soft_drop_active,
      game_over_sound_played, ai_mode_active, last_ai_move_time,
      game_start_time, final_game_time_str, game_paused,
-     time_at_pause, total_paused_duration) = _unpack_game_state(game_state)
+     time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
 
-    running = True; clock = pygame.time.Clock()
-    AI_MOVE_DELAY = 0.05 # Time in seconds between AI moves, adjust for speed
+    running = True
+    # AI_MOVE_DELAY is now a global constant.
+    formatted_time = "" # Initialize formatted_time
 
     while running:
-        for event in pygame.event.get():
-            # Top-level quit check (handles window close)
-            if event.type == pygame.QUIT:
-                running = False
-                continue # Skip further processing for this event
+        # Event Handling
+        events = pygame.event.get()
+        event_handling_result = _handle_events(
+            events, game_over, game_paused, ai_mode_active, soft_drop_active,
+            current_piece, game_grid, running,
+            time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time
+        )
 
-            # Game Over State Input Handling
-            if game_over:
-                action = handle_game_over_inputs(event) # Check for restart or quit commands
-                if action == "RESTART":
-                    game_state = _handle_restart_action() # Call the new restart handler
-                    (game_grid, current_piece, next_piece, score, current_level,
-                     total_lines_cleared, lines_for_current_level, game_over,
-                     current_fall_speed, last_fall_time, soft_drop_active,
-                     game_over_sound_played, ai_mode_active, last_ai_move_time,
-                     game_start_time, final_game_time_str, game_paused,
-                     time_at_pause, total_paused_duration) = _unpack_game_state(game_state)
-                    continue # Important to process next frame with the new game state
-                elif action == "QUIT":
-                    running = False # Set running to false to exit the main loop
-                    continue # Skip further processing for this event
+        running = event_handling_result["running"]
+        game_paused = event_handling_result["game_paused"]
+        ai_mode_active = event_handling_result["ai_mode_active"]
+        soft_drop_active = event_handling_result["soft_drop_active"]
+        current_piece = event_handling_result["current_piece"]
+        time_at_pause = event_handling_result["time_at_pause"]
+        total_paused_duration = event_handling_result["total_paused_duration"]
+        last_fall_time = event_handling_result["last_fall_time"]
+        last_ai_move_time = event_handling_result["last_ai_move_time"]
+        action_request = event_handling_result["action_request"]
 
-            # Active Gameplay Input Handling (Not Game Over)
-            else:
-                # Pause Toggle (handles KEYDOWN for PAUSE_KEY)
-                if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
-                    game_paused = not game_paused
-                    if game_paused:
-                        time_at_pause = time.time() # Record time when paused
-                        print("Game Paused")
-                        # play_sound("pause") # Optional: if pause sound exists
-                    else: # Game is unpausing
-                        # Add the duration of this pause to total_paused_duration
-                        total_paused_duration += time.time() - time_at_pause
-                        # Adjust last_fall_time and last_ai_move_time to prevent sudden catch-up
-                        # This makes the piece and AI resume from the moment of unpause, not "catching up" on paused time.
-                        last_fall_time = time.time()
-                        last_ai_move_time = time.time()
-                        print("Game Resumed")
-                        # play_sound("unpause") # Optional: if unpause sound exists
+        if not running: # If _handle_events set running to False (e.g. QUIT action)
+            continue
 
-                # Process other game inputs only if not paused
-                if not game_paused:
-                    # AI Mode Toggle (handles KEYDOWN for AI_PLAYER_TOGGLE_KEY)
-                    if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
-                        ai_mode_active = not ai_mode_active
-                        print(f"AI Mode Toggled: {ai_mode_active}")
-                        if ai_mode_active: # When AI is activated
-                            soft_drop_active = False # Ensure player's soft drop is off
-                            if current_piece: current_piece.is_hard_dropping_animated = False # Cancel any ongoing player hard drop
-                            last_ai_move_time = time.time() # Allow AI to make a move relatively soon
+        if action_request == "RESTART":
+            game_state_dict = _handle_restart_action()
+            (game_grid, current_piece, next_piece, score, current_level,
+             total_lines_cleared, lines_for_current_level, game_over,
+             current_fall_speed, last_fall_time, soft_drop_active,
+             game_over_sound_played, ai_mode_active, last_ai_move_time,
+             game_start_time, final_game_time_str, game_paused,
+             time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
+            formatted_time = "" # Reset formatted_time on restart
+            continue
 
-                    # Player-specific controls: only if a piece exists and AI mode is OFF
-                    if current_piece and not ai_mode_active:
-                        # Player piece controls are handled by this function (KEYDOWN for movements, KEYUP for K_DOWN release).
-                        # It internally checks for is_hard_dropping_animated to prevent conflicts.
-                        soft_drop_active = handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active)
+        # Game Logic Update
+        game_logic_result = _update_game_state(
+            game_over, game_paused, ai_mode_active, current_piece, next_piece,
+            game_grid, score, current_level, total_lines_cleared,
+            lines_for_current_level, current_fall_speed, last_fall_time,
+            soft_drop_active, game_over_sound_played, last_ai_move_time,
+            game_start_time, final_game_time_str, total_paused_duration, time_at_pause
+        )
 
-        # --- Game Logic (AI, Piece Movement, Physics) ---
-        # These sections only run if the game is not paused.
-        if not game_paused:
-            # --- AI Player Decision Logic ---
-            # This remains outside the event loop, processed each frame if AI is active
-            if ai_mode_active and not game_over and current_piece and not current_piece.is_hard_dropping_animated:
-                if time.time() - last_ai_move_time > AI_MOVE_DELAY: # Control AI thinking/move frequency
-                    grid_copy_for_ai = clone_grid(game_grid) # Give AI a fresh copy of the board
-                # Pass current_piece and next_piece (if AI uses it)
-                # The find_best_move function was updated to return a dictionary
-                best_move_info = find_best_move(grid_copy_for_ai, current_piece, next_piece)
-
-                if best_move_info and best_move_info['x'] != -1: # Check if a valid move was found
-                    # print(f"AI move: r={best_move_info['rotation']}, x={best_move_info['x']}, y_land={best_move_info['landing_y']}, s={best_move_info['score']:.2f}")
-                    current_piece.rotation = best_move_info['rotation']
-                    current_piece.x = best_move_info['x']
-                    # AI always hard drops; use the animation for visual feedback
-                    current_piece.target_y_for_animated_drop = best_move_info['landing_y']
-                    current_piece.is_hard_dropping_animated = True
-                    soft_drop_active = False # Ensure soft drop is off for AI moves
-                else:
-                    # This case implies AI found no valid moves. Should ideally not happen unless game is about to be over.
-                    print("AI: No valid moves found by find_best_move. Setting game over.")
-                    game_over = True # If AI cannot find a move, game is likely over or in an unrecoverable state.
-                last_ai_move_time = time.time() # Reset AI move timer
-
-        # --- Animated Hard Drop Logic (executes if is_hard_dropping_animated is True) ---
-        if not game_over and current_piece and current_piece.is_hard_dropping_animated:
-            current_piece.y += 1 # Move piece down for animation frame
-            # Check if piece reached or passed its target landing position
-            if current_piece.y >= current_piece.target_y_for_animated_drop:
-                current_piece.y = current_piece.target_y_for_animated_drop # Ensure it lands exactly on target
-                current_piece.is_hard_dropping_animated = False # Deactivate animation state
-                # current_piece.target_y_for_animated_drop = -1 # Reset target_y (optional)
-                # --- Piece has landed: Lock piece and handle consequences (lines, score, next piece) ---
-                add_to_grid(current_piece, game_grid)
-                lines_this_drop = check_and_clear_lines(game_grid)
-                if lines_this_drop > 0:
-                    score += get_score_for_lines(lines_this_drop, current_level)
-                    total_lines_cleared += lines_this_drop
-                    lines_for_current_level = total_lines_cleared % LINES_PER_LEVEL # Update progress for current level's bar
-                    new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
-                    if new_level_calc > current_level:
-                        current_level = min(new_level_calc, 100)
-                        current_fall_speed = calculate_fall_speed(current_level)
-                        play_sound("level_up")
-                        if add_garbage_blocks(game_grid, current_level):
-                            game_over = True; current_piece = None
-                if not game_over:
-                    current_piece = next_piece
-                    current_piece.x = GRID_WIDTH // 2; current_piece.y = 0
-                    next_piece = Piece(0,0)
-                    if not is_valid_position(current_piece, game_grid):
-                        game_over = True; current_piece = None
-                last_fall_time = time.time()
-                soft_drop_active = False # Cancel soft drop after any lock
-            # else: piece continues animating downwards next frame
-
-        # Automatic piece descent (handles normal fall and soft drop)
-        if not game_over and current_piece and not current_piece.is_hard_dropping_animated: # Normal piece fall, only if not hard drop animating
-            fall_interval = current_fall_speed
-            if soft_drop_active: fall_interval = min(current_fall_speed, 0.05)
-
-            if time.time() - last_fall_time > fall_interval:
-                current_piece.y += 1
-                if not is_valid_position(current_piece, game_grid):
-                    current_piece.y -= 1
-                    add_to_grid(current_piece, game_grid)
-                    lines_this_drop = check_and_clear_lines(game_grid)
-                    if lines_this_drop > 0:
-                        score += get_score_for_lines(lines_this_drop, current_level); total_lines_cleared += lines_this_drop
-                        lines_for_current_level = total_lines_cleared % LINES_PER_LEVEL # Update progress for current level's bar
-                        new_level_calc = (total_lines_cleared // LINES_PER_LEVEL) + 1
-                        if new_level_calc > current_level:
-                            current_level = min(new_level_calc, 100); current_fall_speed = calculate_fall_speed(current_level)
-                            play_sound("level_up")
-                            if add_garbage_blocks(game_grid, current_level): game_over = True; current_piece = None
-
-                    if not game_over:
-                        current_piece = next_piece
-                        current_piece.x = GRID_WIDTH // 2; current_piece.y = 0
-                        next_piece = Piece(0,0)
-                        if not is_valid_position(current_piece, game_grid): game_over = True; current_piece = None
-                last_fall_time = time.time()
-
-        # --- Game Over State Update (after all game logic for the frame) ---
-        if game_over and not game_over_sound_played:
-            play_sound("game_over"); game_over_sound_played = True
-            current_piece = None
-            if final_game_time_str is None: # Capture time only once
-                # Ensure this uses the most up-to-date game_start_time and total_paused_duration
-                current_elapsed_time = time.time() - game_start_time - total_paused_duration
-                final_game_time_str = format_time(max(0, current_elapsed_time)) # Capture final time accurately, ensure non-negative
-
-        # Determine the time string to display (live or final frozen time)
-        if game_over and final_game_time_str:
-            # If game is over and final time is captured, use it
-            formatted_time = final_game_time_str
-        elif game_paused:
-            # If game is paused, display the time as it was at the moment of pausing
-            # total_paused_duration here reflects pauses *before* the current one.
-            elapsed_at_pause_moment = (time_at_pause - game_start_time) - total_paused_duration
-            formatted_time = format_time(max(0, elapsed_at_pause_moment)) # Ensure non-negative
-        else:
-            # Game is active and not paused, calculate current live time including all pause durations
-            current_elapsed_seconds = (time.time() - game_start_time) - total_paused_duration
-            formatted_time = format_time(max(0, current_elapsed_seconds)) # Ensure non-negative
+        game_over = game_logic_result["game_over"]
+        current_piece = game_logic_result["current_piece"]
+        next_piece = game_logic_result["next_piece"]
+        game_grid = game_logic_result["game_grid"]
+        score = game_logic_result["score"]
+        current_level = game_logic_result["current_level"]
+        total_lines_cleared = game_logic_result["total_lines_cleared"]
+        lines_for_current_level = game_logic_result["lines_for_current_level"]
+        current_fall_speed = game_logic_result["current_fall_speed"]
+        last_fall_time = game_logic_result["last_fall_time"]
+        soft_drop_active = game_logic_result["soft_drop_active"] # Ensure this is updated if AI takes over
+        game_over_sound_played = game_logic_result["game_over_sound_played"]
+        last_ai_move_time = game_logic_result["last_ai_move_time"]
+        final_game_time_str = game_logic_result["final_game_time_str"]
+        formatted_time = game_logic_result["formatted_time"]
 
         # Drawing
-        screen.fill(BLACK)
-        draw_grid_lines(screen)
-        draw_blocks(screen, game_grid)
-        if not game_over and current_piece:
-             draw_current_piece_on_grid(screen, current_piece)
+        _draw_game_screen(
+            screen, game_grid, current_piece, next_piece, score, current_level,
+            total_lines_cleared, lines_for_current_level, ai_mode_active,
+            formatted_time, game_over, game_paused, clock
+        )
 
-        draw_full_ui(screen, score, current_level, total_lines_cleared, next_piece if not game_over else None, lines_for_current_level, ai_mode_active, formatted_time) # Pass formatted_time (and ai_mode_active)
-
-        if game_over:
-            # Display Game Over and Final Score (Time is handled by draw_full_ui)
-            game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
-            final_score_text = f"Final Score: {score}"
-            final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
-
-            text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() / 2))
-            text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() / 2))
-
-            screen.blit(game_over_text_surf, text_rect_game_over)
-            screen.blit(final_score_surf, text_rect_score)
-
-            # Add Restart and Quit instructions to Game Over screen
-            restart_text_surf = INFO_FONT.render("Press 'R' to Restart", True, WHITE)
-            quit_text_surf = INFO_FONT.render("Press 'ESC' to Quit", True, WHITE)
-
-            y_pos_restart = text_rect_score.bottom + 20 # Position below final score
-            text_rect_restart = restart_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_restart + restart_text_surf.get_height() // 2))
-            screen.blit(restart_text_surf, text_rect_restart)
-
-            y_pos_quit = text_rect_restart.bottom + 10 # Padding
-            text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
-            screen.blit(quit_text_surf, text_rect_quit)
-
-        # Display PAUSED message if game is paused (and not game over)
-        if game_paused and not game_over:
-            pause_text_surface = GAME_OVER_FONT.render("PAUSED", True, YELLOW) # Using GAME_OVER_FONT for size
-            text_rect_pause = pause_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-            screen.blit(pause_text_surface, text_rect_pause)
-
-        pygame.display.flip()
-        clock.tick(60)
-
-    # This sleep is outside the main running loop, so it executes after pygame.quit() if not careful
-    # pygame.quit() should be the very last thing related to pygame.
-
-    # Keep window open for a bit after game over, only if game_over is true
-    # The main loop `while running` now handles this by continuing to draw the game over screen
-    # until `running` is set to False (e.g., by QUIT event).
-    # The sleep here is effectively for console applications or if quit is immediate.
-    # For Pygame, the loop itself manages visibility.
-    # No time.sleep(3) here as game over screen is part of the loop.
 
     pygame.mixer.quit()
     pygame.font.quit()
