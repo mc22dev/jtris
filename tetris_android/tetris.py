@@ -697,6 +697,40 @@ def reset_game_state():
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
+def _handle_restart_action():
+    # This function will be responsible for managing the game restart logic.
+    # It calls reset_game_state to get a fresh set of game parameters.
+    new_game_state = reset_game_state()
+    return new_game_state
+
+def _unpack_game_state(game_state_dict):
+    game_grid = game_state_dict["game_grid"]
+    current_piece = game_state_dict["current_piece"]
+    next_piece = game_state_dict["next_piece"]
+    score = game_state_dict["score"]
+    current_level = game_state_dict["current_level"]
+    total_lines_cleared = game_state_dict["total_lines_cleared"]
+    lines_for_current_level = game_state_dict["lines_for_current_level"]
+    game_over = game_state_dict["game_over"]
+    current_fall_speed = game_state_dict["current_fall_speed"]
+    last_fall_time = game_state_dict["last_fall_time"]
+    soft_drop_active = game_state_dict["soft_drop_active"]
+    game_over_sound_played = game_state_dict["game_over_sound_played"]
+    ai_mode_active = game_state_dict["ai_mode_active"]
+    last_ai_move_time = game_state_dict["last_ai_move_time"]
+    game_start_time = game_state_dict["game_start_time"]
+    final_game_time_str = game_state_dict["final_game_time_str"]
+    game_paused = game_state_dict["game_paused"]
+    time_at_pause = game_state_dict["time_at_pause"]
+    total_paused_duration = game_state_dict["total_paused_duration"]
+
+    return (game_grid, current_piece, next_piece, score, current_level,
+            total_lines_cleared, lines_for_current_level, game_over,
+            current_fall_speed, last_fall_time, soft_drop_active,
+            game_over_sound_played, ai_mode_active, last_ai_move_time,
+            game_start_time, final_game_time_str, game_paused,
+            time_at_pause, total_paused_duration)
+
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -714,15 +748,12 @@ def main():
 
     # Initial game state setup using the reset function
     game_state = reset_game_state()
-    # Unpack all game state variables from the dictionary
-    game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
-    score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
-    lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"]
-    current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
-    soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
-    ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
-    game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
-    game_paused = game_state["game_paused"]; time_at_pause = game_state["time_at_pause"]; total_paused_duration = game_state["total_paused_duration"]
+    (game_grid, current_piece, next_piece, score, current_level,
+     total_lines_cleared, lines_for_current_level, game_over,
+     current_fall_speed, last_fall_time, soft_drop_active,
+     game_over_sound_played, ai_mode_active, last_ai_move_time,
+     game_start_time, final_game_time_str, game_paused,
+     time_at_pause, total_paused_duration) = _unpack_game_state(game_state)
 
     running = True; clock = pygame.time.Clock()
     AI_MOVE_DELAY = 0.05 # Time in seconds between AI moves, adjust for speed
@@ -738,16 +769,13 @@ def main():
             if game_over:
                 action = handle_game_over_inputs(event) # Check for restart or quit commands
                 if action == "RESTART":
-                    game_state = reset_game_state() # Reset the entire game state
-                    # Unpack all game state variables from the dictionary for the new game
-                    game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
-                    score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
-                    lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"] # This makes game_over False
-                    current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
-                    soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
-                    ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
-                    game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
-                        game_paused = game_state["game_paused"]; time_at_pause = game_state["time_at_pause"]; total_paused_duration = game_state["total_paused_duration"]
+                    game_state = _handle_restart_action() # Call the new restart handler
+                    (game_grid, current_piece, next_piece, score, current_level,
+                     total_lines_cleared, lines_for_current_level, game_over,
+                     current_fall_speed, last_fall_time, soft_drop_active,
+                     game_over_sound_played, ai_mode_active, last_ai_move_time,
+                     game_start_time, final_game_time_str, game_paused,
+                     time_at_pause, total_paused_duration) = _unpack_game_state(game_state)
                     continue # Important to process next frame with the new game state
                 elif action == "QUIT":
                     running = False # Set running to false to exit the main loop
