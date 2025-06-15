@@ -767,6 +767,21 @@ def _load_best_score():
         print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults.")
         return copy.deepcopy(default_score_data)
 
+def _save_best_score(username, score, time_str):
+    filename = "best_score.json"
+    data_to_save = {
+        "username": username,
+        "score": score,
+        "time_str": time_str
+    }
+
+    try:
+        with open(filename, 'w') as f:
+            json.dump(data_to_save, f, indent=4)
+        print(f"New best score saved to {filename}.") # Informative print
+    except Exception as e:
+        print(f"Error saving best score to {filename}: {e}")
+
 def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str):
     action_request = None
     # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
@@ -1317,15 +1332,22 @@ def main():
         final_game_time_str = game_logic_result["final_game_time_str"] # This is set in _update_game_state
         formatted_time = game_logic_result["formatted_time"]
 
+        # (This should be after game_over is updated by _update_game_state result,
+        # and before the if game_over and not prev_game_over block)
+        print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, best_score={best_score_data.get('score')}, current_game_phase='{game_phase}'")
+
         # Game Phase Transition Logic (after game logic updates game_over)
         if game_over and not prev_game_over: # Game just ended
+            print(f"DEBUG MainLoop: Game JUST ENDED. Comparing score ({score}) with best_score ({best_score_data.get('score')}).")
             if score > best_score_data["score"]:
                 game_phase = "GETTING_USERNAME"
                 current_username_input = "" # Ensure it's reset
+                print(f"DEBUG MainLoop: New best score! game_phase set to '{game_phase}'.")
                 # game_paused is likely already true if help screen was used, or should be set
                 # game_paused = True # Ensure game is paused for name input
             else:
                 game_phase = "GAME_OVER"
+                print(f"DEBUG MainLoop: Not a new best score. game_phase set to '{game_phase}'.")
 
         # Drawing
         _draw_game_screen(
