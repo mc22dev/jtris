@@ -4,12 +4,15 @@ import time
 import os
 import copy
 import json
+import argparse
 
 # Initialize Pygame
 pygame.init()
 pygame.font.init()
 pygame.mixer.init()
 pygame.joystick.init()
+
+DEBUG_MODE = False
 
 # Screen dimensions
 SCREEN_WIDTH = 1920
@@ -797,17 +800,17 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             help_screen_active_flag = not help_screen_active_flag
             if help_screen_active_flag:
                 game_paused_flag = True
-                print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
+                if DEBUG_MODE: print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
             else:
                 game_paused_flag = False
-                print("Help screen NEWLY DEACTIVATED. game_paused_flag set to False.")
+                if DEBUG_MODE: print("Help screen NEWLY DEACTIVATED. game_paused_flag set to False.")
             continue
 
         # Close Help with ESC
         if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             help_screen_active_flag = False
             game_paused_flag = False # Unpause game
-            print("Help screen deactivated by ESC")
+            if DEBUG_MODE: print("Help screen deactivated by ESC")
             continue
 
         if help_screen_active_flag: # If help is active, skip all other game inputs
@@ -840,19 +843,19 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                 game_paused_flag = not game_paused_flag
                 if game_paused_flag:
                     time_at_pause_val = time.time()
-                    print(f"Game Paused (P key). Paused: {game_paused_flag}")
+                    if DEBUG_MODE: print(f"Game Paused (P key). Paused: {game_paused_flag}")
                 else: # Unpausing
                     total_paused_duration_val += time.time() - time_at_pause_val
                     last_fall_time_val = time.time()
                     last_ai_move_time_val = time.time()
-                    print(f"Game Resumed (P key). Paused: {game_paused_flag}")
+                    if DEBUG_MODE: print(f"Game Resumed (P key). Paused: {game_paused_flag}")
                 continue
 
             if not game_paused_flag: # Only if game is not paused by 'P' (or help screen, or joystick pause)
                 # AI Mode Toggle (A key)
                 if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
                     ai_mode_flag = not ai_mode_flag
-                    print(f"AI Mode Toggled (A key). AI: {ai_mode_flag}")
+                    if DEBUG_MODE: print(f"AI Mode Toggled (A key). AI: {ai_mode_flag}")
                     if ai_mode_flag:
                         soft_drop_flag = False
                         if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
@@ -861,7 +864,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
 
                 # Player-specific KEYBOARD controls for active play
                 if current_piece_obj and not ai_mode_flag:
-                    print(f"DEBUG: Event for handle_player_piece_controls: type={event.type}, game_phase='{game_phase_str}', game_paused={game_paused_flag}, help_active={help_screen_active_flag}, ai_active={ai_mode_flag}")
+                    if DEBUG_MODE: print(f"DEBUG: Event for handle_player_piece_controls: type={event.type}, game_phase='{game_phase_str}', game_paused={game_paused_flag}, help_active={help_screen_active_flag}, ai_active={ai_mode_flag}")
                     soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag)
 
                 # Joystick controls for active play (piece movement)
@@ -933,17 +936,17 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     game_paused_flag = not game_paused_flag
                     if game_paused_flag:
                         time_at_pause_val = time.time()
-                        print(f"Game Paused (Joystick Start). Paused: {game_paused_flag}")
+                        if DEBUG_MODE: print(f"Game Paused (Joystick Start). Paused: {game_paused_flag}")
                     else: # Unpausing
                         total_paused_duration_val += time.time() - time_at_pause_val
                         last_fall_time_val = time.time()
                         last_ai_move_time_val = time.time()
-                        print(f"Game Resumed (Joystick Start). Paused: {game_paused_flag}")
+                        if DEBUG_MODE: print(f"Game Resumed (Joystick Start). Paused: {game_paused_flag}")
                     continue
             elif button == 6: # Select Button
                  if game_phase_str == "PLAYING" and not game_paused_flag: # AI toggle only if playing and not paused
                     ai_mode_flag = not ai_mode_flag
-                    print(f"AI Mode Toggled (Joystick Select). AI: {ai_mode_flag}")
+                    if DEBUG_MODE: print(f"AI Mode Toggled (Joystick Select). AI: {ai_mode_flag}")
                     if ai_mode_flag:
                         soft_drop_flag = False
                         if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
@@ -983,7 +986,7 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
                     current_piece_obj.is_hard_dropping_animated = True
                     soft_drop_flag = False
                 else:
-                    print("AI: No valid moves found by find_best_move. Setting game over.")
+                    if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
                     game_over_flag = True
                 last_ai_move_time_val = time.time()
 
@@ -1208,6 +1211,16 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         clock_obj.tick(60)
 
 def main():
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(description="Tetris Game with an AI player option.")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging to console.")
+    args = parser.parse_args()
+
+    global DEBUG_MODE # Declare intent to modify the global DEBUG_MODE
+    if args.debug:
+        DEBUG_MODE = True
+        print("DEBUG MODE ENABLED")
+    # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
@@ -1334,20 +1347,20 @@ def main():
 
         # (This should be after game_over is updated by _update_game_state result,
         # and before the if game_over and not prev_game_over block)
-        print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, best_score={best_score_data.get('score')}, current_game_phase='{game_phase}'")
+        if DEBUG_MODE: print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, best_score={best_score_data.get('score')}, current_game_phase='{game_phase}'")
 
         # Game Phase Transition Logic (after game logic updates game_over)
         if game_over and not prev_game_over: # Game just ended
-            print(f"DEBUG MainLoop: Game JUST ENDED. Comparing score ({score}) with best_score ({best_score_data.get('score')}).")
+            if DEBUG_MODE: print(f"DEBUG MainLoop: Game JUST ENDED. Comparing score ({score}) with best_score ({best_score_data.get('score')}).")
             if score > best_score_data["score"]:
                 game_phase = "GETTING_USERNAME"
                 current_username_input = "" # Ensure it's reset
-                print(f"DEBUG MainLoop: New best score! game_phase set to '{game_phase}'.")
+                if DEBUG_MODE: print(f"DEBUG MainLoop: New best score! game_phase set to '{game_phase}'.")
                 # game_paused is likely already true if help screen was used, or should be set
                 # game_paused = True # Ensure game is paused for name input
             else:
                 game_phase = "GAME_OVER"
-                print(f"DEBUG MainLoop: Not a new best score. game_phase set to '{game_phase}'.")
+                if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new best score. game_phase set to '{game_phase}'.")
 
         # Drawing
         _draw_game_screen(
