@@ -767,7 +767,7 @@ def _load_best_score():
         print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults.")
         return copy.deepcopy(default_score_data)
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str): # Added game_phase_str, current_username_str
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str):
     action_request = None
     # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
 
@@ -779,15 +779,14 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
 
         # Help Screen Toggle (H)
         if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
-            print(f"K_h detected. help_screen_active_flag before toggle: {help_screen_active_flag}")
-            help_screen_active_flag = not help_screen_active_flag # Toggle the flag
+            help_screen_active_flag = not help_screen_active_flag
             if help_screen_active_flag:
-                game_paused_flag = True  # Pause game when help becomes active
+                game_paused_flag = True
                 print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
             else:
-                game_paused_flag = False # Unpause game when help becomes inactive
+                game_paused_flag = False
                 print("Help screen NEWLY DEACTIVATED. game_paused_flag set to False.")
-            continue # Crucial to skip other inputs for this event
+            continue
 
         # Close Help with ESC
         if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -807,180 +806,149 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                         action_request = "SAVE_SCORE"
                     else:
                         action_request = "SKIP_SAVE"
+                    continue
                 elif event.key == pygame.K_ESCAPE:
                     action_request = "SKIP_SAVE"
+                    continue
                 elif event.key == pygame.K_BACKSPACE:
                     current_username_str = current_username_str[:-1]
+                    continue
                 elif len(current_username_str) < 15 and event.unicode.isalnum():
                     current_username_str += event.unicode.upper()
-            # In GETTING_USERNAME phase, only process above inputs or global (QUIT, HELP)
-            # No 'continue' here, as the loop should finish for this event,
-            # but the main game inputs below are skipped due to the outer if/elif.
+                    continue
+            else: # If not KEYDOWN, but still in GETTING_USERNAME phase
+                continue # Consume other event types too for this phase
 
-        elif game_phase_str == "PLAYING" or game_phase_str == "GAME_OVER":
-            # Game Over State Input Handling (for "GAME_OVER" phase)
-            if game_over_flag: # This implies game_phase_str == "GAME_OVER"
-                action = None  # Initialize 'action' to None for every event when game_over is true.
-                               # This line MUST be executed for each event if game_over_flag is true.
-
-                if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
-                    # 'action' is potentially updated here by handle_game_over_inputs
-                    action = handle_game_over_inputs(event)
-
-                # Now 'action' is guaranteed to be defined (either None or a string from handle_game_over_inputs)
-                if action == "RESTART":
-                    action_request = "RESTART"
-                    break  # Exit event loop for this frame, main will handle reset
-                elif action == "QUIT":
-                    running_flag = False
-                    # action_request = "QUIT" # Optional, as running_flag = False handles exit
-                    break  # Exit event loop for this frame, main will terminate
-
-        # Active Gameplay Input Handling (Not Game Over)
-        else:
-            # Pause Toggle (handles KEYDOWN for PAUSE_KEY)
+        elif game_phase_str == "PLAYING":
+            # Pause Toggle (P key)
             if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
                 game_paused_flag = not game_paused_flag
                 if game_paused_flag:
-                    time_at_pause_val = time.time() # Record time when paused
-                    print("Game Paused")
-                    # play_sound("pause") # Optional: if pause sound exists
-                else: # Game is unpausing
-                    # Add the duration of this pause to total_paused_duration
+                    time_at_pause_val = time.time()
+                    print(f"Game Paused (P key). Paused: {game_paused_flag}")
+                else: # Unpausing
                     total_paused_duration_val += time.time() - time_at_pause_val
-                    # Adjust last_fall_time and last_ai_move_time to prevent sudden catch-up
                     last_fall_time_val = time.time()
                     last_ai_move_time_val = time.time()
-                    print("Game Resumed")
-                    # play_sound("unpause") # Optional: if unpause sound exists
+                    print(f"Game Resumed (P key). Paused: {game_paused_flag}")
+                continue
 
-            # Process other game inputs only if not paused
-            if not game_paused_flag:
-                # AI Mode Toggle (handles KEYDOWN for AI_PLAYER_TOGGLE_KEY)
+            if not game_paused_flag: # Only if game is not paused by 'P' (or help screen, or joystick pause)
+                # AI Mode Toggle (A key)
                 if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
                     ai_mode_flag = not ai_mode_flag
-                    print(f"AI Mode Toggled: {ai_mode_flag}")
-                    if ai_mode_flag: # When AI is activated
-                        soft_drop_flag = False # Ensure player's soft drop is off
-                        if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False # Cancel any ongoing player hard drop
-                        last_ai_move_time_val = time.time() # Allow AI to make a move relatively soon
+                    print(f"AI Mode Toggled (A key). AI: {ai_mode_flag}")
+                    if ai_mode_flag:
+                        soft_drop_flag = False
+                        if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
+                        last_ai_move_time_val = time.time()
+                    continue
 
-                # Player-specific controls: only if a piece exists and AI mode is OFF
+                # Player-specific KEYBOARD controls for active play
                 if current_piece_obj and not ai_mode_flag:
-                    # Player piece controls are handled by this function (KEYDOWN for movements, KEYUP for K_DOWN release).
-                    # It internally checks for is_hard_dropping_animated to prevent conflicts.
+                    print(f"DEBUG: Event for handle_player_piece_controls: type={event.type}, game_phase='{game_phase_str}', game_paused={game_paused_flag}, help_active={help_screen_active_flag}, ai_active={ai_mode_flag}")
                     soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag)
 
-        # Joystick Event Handling
-        if joystick_enabled_flag and joystick_obj:
-            if event.type == pygame.JOYAXISMOTION:
-                if event.joy == joystick_obj.get_id():
-                    axis = event.axis
-                    value = event.value
-
-                    if not game_over_flag and not game_paused_flag and current_piece_obj and not ai_mode_flag and not current_piece_obj.is_hard_dropping_animated:
-                        if axis == 0: # X-axis
-                            if value < -0.5: # Left
-                                current_piece_obj.x -= 1
-                                if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x += 1
+                # Joystick controls for active play (piece movement)
+                if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag:
+                    if event.type == pygame.JOYAXISMOTION:
+                        if event.joy == joystick_obj.get_id():
+                            axis = event.axis
+                            value = event.value
+                            if not current_piece_obj.is_hard_dropping_animated:
+                                if axis == 0: # X-axis
+                                    if value < -0.5: current_piece_obj.x -= 1
+                                    elif value > 0.5: current_piece_obj.x += 1
+                                    if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= (1 if value > 0.5 else -1)
+                                    else: play_sound("move")
+                                elif axis == 1: # Y-axis
+                                    if value > 0.5: soft_drop_flag = True
+                                    else: soft_drop_flag = False
+                    elif event.type == pygame.JOYHATMOTION:
+                        if event.joy == joystick_obj.get_id():
+                            hat_x, hat_y = event.value
+                            if not current_piece_obj.is_hard_dropping_animated:
+                                if hat_x == -1: current_piece_obj.x -= 1
+                                elif hat_x == 1: current_piece_obj.x += 1
+                                if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= (1 if hat_x == 1 else -1)
                                 else: play_sound("move")
-                            elif value > 0.5: # Right
-                                current_piece_obj.x += 1
-                                if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= 1
-                                else: play_sound("move")
-                        elif axis == 1: # Y-axis
-                            if value > 0.5: # Down (Soft Drop)
-                                soft_drop_flag = True
-                            elif value < -0.5: # Up (could be rotate or other action if desired)
-                                # current_piece_obj.rotate(game_grid_data) # Example if Y-axis up is rotate
-                                pass # Currently no action for Y-axis up on analog stick
-                            else: # Axis released from soft drop or up position
-                                soft_drop_flag = False
 
-            elif event.type == pygame.JOYHATMOTION:
-                if event.joy == joystick_obj.get_id():
-                    hat_x, hat_y = event.value
-                    if not game_over_flag and not game_paused_flag and current_piece_obj and not ai_mode_flag and not current_piece_obj.is_hard_dropping_animated:
-                        if hat_x == -1: # Left
-                            current_piece_obj.x -= 1
-                            if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x += 1
-                            else: play_sound("move")
-                        elif hat_x == 1: # Right
-                            current_piece_obj.x += 1
-                            if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= 1
-                            else: play_sound("move")
+                                if hat_y == -1: soft_drop_flag = True
+                                elif hat_y == 1: current_piece_obj.rotate(game_grid_data)
+                                else: # Y is neutral
+                                     if hat_x == 0 : soft_drop_flag = False # only reset soft_drop if X is also neutral
 
-                        if hat_y == -1: # Down (D-Pad Y is often inverted, -1 is down)
-                            soft_drop_flag = True
-                        elif hat_y == 1: # Up
-                            current_piece_obj.rotate(game_grid_data)
+                    elif event.type == pygame.JOYBUTTONDOWN:
+                         if event.joy == joystick_obj.get_id():
+                            button = event.button
+                            if button != 6 and button != 7: # Ensure not global action buttons
+                                if not current_piece_obj.is_hard_dropping_animated:
+                                    if button == 0:
+                                        current_piece_obj.rotate(game_grid_data)
+                                    elif button == 1:
+                                        original_y = current_piece_obj.y
+                                        temp_piece_for_calc = Piece(current_piece_obj.x, original_y, current_piece_obj.shape_type)
+                                        temp_piece_for_calc.rotation = current_piece_obj.rotation
+                                        calculated_target_y = original_y
+                                        while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)):
+                                            calculated_target_y += 1
+                                        current_piece_obj.target_y_for_animated_drop = calculated_target_y
+                                        current_piece_obj.is_hard_dropping_animated = True
+                                        soft_drop_flag = False
 
-                        if hat_y == 0 : # Hat Y released to center (relevant if hat_x is also 0 for full neutral)
-                            soft_drop_flag = False
+        elif game_phase_str == "GAME_OVER":
+            action = None
+            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
+                action = handle_game_over_inputs(event)
 
+            if action == "RESTART":
+                action_request = "RESTART"
+                break
+            elif action == "QUIT":
+                running_flag = False
+                break
+            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN: # If it was a keydown/quit, and not restart/quit action
+                 continue
 
-            elif event.type == pygame.JOYBUTTONDOWN:
-                if event.joy == joystick_obj.get_id():
-                    button = event.button
-
-                    # Button 0 (Typically 'A' on Xbox, Cross on PS) - Rotate
-                    if button == 0:
-                        if not game_over_flag and not game_paused_flag and current_piece_obj and not ai_mode_flag and not current_piece_obj.is_hard_dropping_animated:
-                            current_piece_obj.rotate(game_grid_data)
-
-                    # Button 1 (Typically 'B' on Xbox, Circle on PS) - Hard Drop
-                    elif button == 1:
-                        if not game_over_flag and not game_paused_flag and current_piece_obj and not ai_mode_flag and not current_piece_obj.is_hard_dropping_animated:
-                            original_y = current_piece_obj.y
-                            temp_piece_for_calc = Piece(current_piece_obj.x, original_y, current_piece_obj.shape_type)
-                            temp_piece_for_calc.rotation = current_piece_obj.rotation
-                            calculated_target_y = original_y
-                            while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)):
-                                calculated_target_y += 1
-                            current_piece_obj.target_y_for_animated_drop = calculated_target_y
-                            current_piece_obj.is_hard_dropping_animated = True
-                            soft_drop_flag = False
-
-                    # Button 7 (Typically 'Start') - Pause / Restart
-                    elif button == 7:
-                        if game_over_flag:
-                            action_request = "RESTART"
-                            break # Exit event loop for restart
-                        else: # Not game over, so toggle pause
-                            game_paused_flag = not game_paused_flag
-                            if game_paused_flag:
-                                time_at_pause_val = time.time()
-                                print("Game Paused (Joystick)")
-                            else: # Unpausing
-                                total_paused_duration_val += time.time() - time_at_pause_val
-                                last_fall_time_val = time.time()
-                                last_ai_move_time_val = time.time()
-                                print("Game Resumed (Joystick)")
-
-                    # Button 6 (Typically 'Back' or 'Select') - AI Toggle
-                    elif button == 6:
-                        if not game_over_flag and not game_paused_flag: # AI toggle only if game active
-                            ai_mode_flag = not ai_mode_flag
-                            print(f"AI Mode Toggled (Joystick): {ai_mode_flag}")
-                            if ai_mode_flag:
-                                soft_drop_flag = False
-                                if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
-                                last_ai_move_time_val = time.time()
+        # Joystick button handling for global actions (Pause, AI) - outside phase-specific piece controls
+        if joystick_enabled_flag and joystick_obj and event.type == pygame.JOYBUTTONDOWN:
+            button = event.button
+            if button == 7: # Start Button
+                if game_phase_str == "PLAYING": # Pause/Resume only during active play
+                    game_paused_flag = not game_paused_flag
+                    if game_paused_flag:
+                        time_at_pause_val = time.time()
+                        print(f"Game Paused (Joystick Start). Paused: {game_paused_flag}")
+                    else: # Unpausing
+                        total_paused_duration_val += time.time() - time_at_pause_val
+                        last_fall_time_val = time.time()
+                        last_ai_move_time_val = time.time()
+                        print(f"Game Resumed (Joystick Start). Paused: {game_paused_flag}")
+                    continue
+            elif button == 6: # Select Button
+                 if game_phase_str == "PLAYING" and not game_paused_flag: # AI toggle only if playing and not paused
+                    ai_mode_flag = not ai_mode_flag
+                    print(f"AI Mode Toggled (Joystick Select). AI: {ai_mode_flag}")
+                    if ai_mode_flag:
+                        soft_drop_flag = False
+                        if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
+                        last_ai_move_time_val = time.time()
+                    continue
 
     return {
         "running": running_flag,
         "game_paused": game_paused_flag,
         "ai_mode_active": ai_mode_flag,
         "soft_drop_active": soft_drop_flag,
-        "current_piece": current_piece_obj, # Return potentially modified piece
+        "current_piece": current_piece_obj,
         "time_at_pause": time_at_pause_val,
         "total_paused_duration": total_paused_duration_val,
         "last_fall_time": last_fall_time_val,
         "last_ai_move_time": last_ai_move_time_val,
         "action_request": action_request,
         "help_screen_active": help_screen_active_flag,
-        "current_username_input": current_username_str, # Return modified username string
-        "game_phase_str": game_phase_str # Return game_phase_str as it's a parameter now
+        "current_username_input": current_username_str,
+        "game_phase_str": game_phase_str
     }
 
 def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str):
