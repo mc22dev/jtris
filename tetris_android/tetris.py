@@ -185,6 +185,27 @@ def add_to_grid(piece, grid_data):
             if r_idx >=0: grid_data[r_idx][c_idx] = piece.color
         play_sound("drop")
 
+def get_shadow_position_y(piece, grid_data):
+    """
+    Calculates the y-coordinate for the piece's shadow.
+    Iterates downwards from the piece's current y position, checking
+    if the piece would be in a valid position at y + 1.
+    Uses is_valid_position for this check.
+    Returns the last valid y coordinate before collision.
+    """
+    if not piece:
+        return -1 # Or some other indicator of an invalid state
+
+    current_y_offset = 0
+    # We are checking for piece.y + current_y_offset + 1
+    # So, is_valid_position needs to check for an offset from the piece's *original* y.
+    # The 'check_y_offset' parameter in is_valid_position is relative to piece.y.
+    # So, if piece is at y, and we are checking y + k, then check_y_offset = k.
+    while is_valid_position(piece, grid_data, check_y_offset=current_y_offset + 1):
+        current_y_offset += 1
+
+    return piece.y + current_y_offset
+
 def get_full_lines(grid_data):
     full_lines_indices = []
     # Iterate top to bottom to get indices in natural order.
@@ -1241,6 +1262,26 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
     # Regular game drawing (grid, current piece, main UI)
     draw_grid_lines(screen_surface)
     draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val) # Pass animation states
+
+    # Draw shadow piece before the actual piece
+    if not game_over_flag and current_piece_obj and game_phase_str == "PLAYING":
+        shadow_y = get_shadow_position_y(current_piece_obj, game_grid_data)
+        shadow_color = GREY # Or a more transparent color later
+
+        # Check if current_piece_obj is still valid (it should be if we are in "PLAYING" phase)
+        # and also ensure its shape and rotation are valid, though get_shadow_position_y implies validity.
+        if current_piece_obj.shape and current_piece_obj.rotation < len(current_piece_obj.shape):
+            for r_offset, c_offset in current_piece_obj.shape[current_piece_obj.rotation]:
+                block_r = shadow_y + r_offset
+                block_c = current_piece_obj.x + c_offset
+                # Ensure block is within grid boundaries before drawing shadow
+                if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
+                    # Check if the cell for the shadow is empty (optional, but good for visual clarity)
+                    # This prevents drawing shadow over existing landed blocks if logic is imperfect.
+                    # However, get_shadow_position_y should give a position where it *can* land.
+                    # For simplicity, we'll draw it directly.
+                     pygame.draw.rect(screen_surface, shadow_color, (GRID_OFFSET_X + block_c * BLOCK_SIZE, GRID_OFFSET_Y + block_r * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
+
     if not game_over_flag and current_piece_obj and game_phase_str != "GETTING_USERNAME" and game_phase_str != "LINE_ANIMATION": # Don't draw falling piece during name input or line animation
          draw_current_piece_on_grid(screen_surface, current_piece_obj)
 
