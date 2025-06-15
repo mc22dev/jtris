@@ -105,6 +105,11 @@ class Piece:
             self.shape_type = shape_type
         self.shape = SHAPES[self.shape_type]
         self.color = PIECE_COLORS[self.shape_type]
+        # Ensure color is RGB (tuple of 3) and derive RGBA shadow_color (tuple of 4)
+        if len(self.color) == 3:
+            self.shadow_color = (self.color[0], self.color[1], self.color[2], 100)
+        else: # Assuming color might already have alpha, just adjust it or use as is
+            self.shadow_color = (self.color[0], self.color[1], self.color[2], 100) # Or handle error/logging
         self.rotation = 0
         self.x = x # Grid column for current piece, or abstract for next piece
         self.y = y # Grid row for current piece
@@ -146,6 +151,28 @@ def draw_current_piece_on_grid(screen, piece): # Renamed for clarity
             if r_idx >= 0: # Only draw if within visible grid area
                 pygame.draw.rect(screen, piece.color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
 
+def draw_shadow_piece(screen, piece, shadow_y):
+    """Draws the transparent shadow of a piece at the given shadow_y."""
+    if not piece or piece.shadow_color is None:
+        return
+
+    shape_to_draw = piece.shape[piece.rotation]
+    for r_offset, c_offset in shape_to_draw:
+        # Grid coordinates for this block of the shadow piece
+        grid_r = shadow_y + r_offset
+        grid_c = piece.x + c_offset
+
+        # Only draw if within the visible part of the grid (especially top boundary)
+        # and also within horizontal grid boundaries.
+        if grid_r >= 0 and 0 <= grid_c < GRID_WIDTH:
+            draw_x = GRID_OFFSET_X + grid_c * BLOCK_SIZE
+            draw_y = GRID_OFFSET_Y + grid_r * BLOCK_SIZE
+
+            # Create a temporary surface for the shadow block to handle transparency
+            shadow_block_surface = pygame.Surface((BLOCK_SIZE - 1, BLOCK_SIZE - 1), pygame.SRCALPHA)
+            shadow_block_surface.fill(piece.shadow_color) # Fill with RGBA color
+            screen.blit(shadow_block_surface, (draw_x, draw_y))
+
 def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
     if not piece: return False
     for r_idx, c_idx in piece.current_shape_coords():
@@ -154,6 +181,25 @@ def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
         if not (actual_r < GRID_HEIGHT): return False
         if actual_r >= 0 and grid_data[actual_r][c_idx] != 0: return False
     return True
+
+def get_shadow_position(piece, grid_data):
+    """
+    Calculates the lowest possible y coordinate (row) for a piece before collision.
+    Uses the check_y_offset parameter of is_valid_position to avoid modifying the piece.
+    """
+    if not piece:
+        return -1 # Or some other indicator of an invalid input or inability to calculate
+
+    current_y_offset = 0
+    # Starting from 0 offset (current piece.y), check downwards
+    # Increment offset as long as the position with that offset is valid
+    while is_valid_position(piece, grid_data, check_y_offset=current_y_offset + 1):
+        current_y_offset += 1
+
+    # The final landing position's y is piece.y + current_y_offset
+    # current_shape_coords() uses piece.y, so we return the absolute y coordinate
+    # that the piece's pivot would be at.
+    return piece.y + current_y_offset
 
 def add_to_grid(piece, grid_data):
     if piece:
@@ -593,7 +639,7 @@ def handle_game_over_inputs(event):
         return "QUIT"
     if event.type == pygame.KEYDOWN:
         if event.key == RESTART_KEY: # RESTART_KEY should be defined globally
-            return "RESTART"
+            return "INITIATE_RESTART" # Changed from "RESTART"
         if event.key == pygame.K_ESCAPE: # Using ESC as a global quit key too
             return "QUIT"
     return None # No relevant action
@@ -697,6 +743,10 @@ def reset_game_state():
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
+def trigger_game_restart():
+    """Calls reset_game_state and returns the new state. Centralizes restart triggering."""
+    return reset_game_state()
+
 def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -737,17 +787,28 @@ def main():
             # Game Over State Input Handling
             if game_over:
                 action = handle_game_over_inputs(event) # Check for restart or quit commands
-                if action == "RESTART":
-                    game_state = reset_game_state() # Reset the entire game state
+                if action == "INITIATE_RESTART": # Changed condition
+                    game_state = trigger_game_restart() # Call the new restart trigger function
                     # Unpack all game state variables from the dictionary for the new game
-                    game_grid = game_state["game_grid"]; current_piece = game_state["current_piece"]; next_piece = game_state["next_piece"]
-                    score = game_state["score"]; current_level = game_state["current_level"]; total_lines_cleared = game_state["total_lines_cleared"]
-                    lines_for_current_level = game_state["lines_for_current_level"]; game_over = game_state["game_over"] # This makes game_over False
-                    current_fall_speed = game_state["current_fall_speed"]; last_fall_time = game_state["last_fall_time"]
-                    soft_drop_active = game_state["soft_drop_active"]; game_over_sound_played = game_state["game_over_sound_played"]
-                    ai_mode_active = game_state["ai_mode_active"]; last_ai_move_time = game_state["last_ai_move_time"]
-                    game_start_time = game_state["game_start_time"]; final_game_time_str = game_state["final_game_time_str"]
-                        game_paused = game_state["game_paused"]; time_at_pause = game_state["time_at_pause"]; total_paused_duration = game_state["total_paused_duration"]
+                    game_grid = game_state["game_grid"]
+                    current_piece = game_state["current_piece"]
+                    next_piece = game_state["next_piece"]
+                    score = game_state["score"]
+                    current_level = game_state["current_level"]
+                    total_lines_cleared = game_state["total_lines_cleared"]
+                    lines_for_current_level = game_state["lines_for_current_level"]
+                    game_over = game_state["game_over"] # This will be False from reset_game_state
+                    current_fall_speed = game_state["current_fall_speed"]
+                    last_fall_time = game_state["last_fall_time"]
+                    soft_drop_active = game_state["soft_drop_active"]
+                    game_over_sound_played = game_state["game_over_sound_played"]
+                    ai_mode_active = game_state["ai_mode_active"]
+                    last_ai_move_time = game_state["last_ai_move_time"]
+                    game_start_time = game_state["game_start_time"]
+                    final_game_time_str = game_state["final_game_time_str"]
+                    game_paused = game_state["game_paused"]
+                    time_at_pause = game_state["time_at_pause"]
+                    total_paused_duration = game_state["total_paused_duration"]
                     continue # Important to process next frame with the new game state
                 elif action == "QUIT":
                     running = False # Set running to false to exit the main loop
@@ -900,7 +961,14 @@ def main():
         # Drawing
         screen.fill(BLACK)
         draw_grid_lines(screen)
-        draw_blocks(screen, game_grid)
+        draw_blocks(screen, game_grid) # Draws landed blocks
+
+        # Draw shadow piece (ghost piece)
+        if not game_over and current_piece:
+            shadow_y = get_shadow_position(current_piece, game_grid)
+            draw_shadow_piece(screen, current_piece, shadow_y)
+
+        # Draw current falling piece
         if not game_over and current_piece:
              draw_current_piece_on_grid(screen, current_piece)
 
