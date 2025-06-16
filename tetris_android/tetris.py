@@ -1080,7 +1080,21 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             continue
 
         # Phase-specific event handling
-        if game_phase_str == "GETTING_USERNAME":
+        if game_phase_str == "HIGH_SCORE_DISPLAY":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running_flag = False # Signal to quit the game
+                    if DEBUG_MODE: print("DEBUG _handle_events: ESCAPE pressed on High Score screen. Setting running_flag=False.")
+                else:
+                    # Any other key press triggers a restart
+                    action_request = "RESTART"
+                    if DEBUG_MODE: print(f"DEBUG _handle_events: Key {event.key} pressed on High Score screen. Requesting RESTART.")
+
+            if event.type == pygame.QUIT: # Still handle window close
+                 running_flag = False
+            continue # Consume the event, stop further processing
+
+        elif game_phase_str == "GETTING_USERNAME":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     if current_username_str:
@@ -1522,7 +1536,75 @@ def _draw_help_screen(screen_surface, help_text_surfaces_list):
         screen_surface.blit(surface, (text_x, current_y))
         current_y += surface.get_height() + line_padding
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag, next_piece_1_obj, next_piece_2_obj
+def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
+    # """
+    # Draws the high score screen.
+    # Args:
+    #     screen_surface: Pygame screen surface.
+    #     top_scores_list (list): List of top score dictionaries.
+    #     fonts (dict): Dictionary containing Pygame font objects (e.g., fonts["title"], fonts["score"], fonts["info"]).
+    # """
+    screen_surface.fill(BLACK) # This is the added line
+
+    title_font = fonts.get("title", pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE))
+    score_font = fonts.get("score", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
+    info_font = fonts.get("info", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
+
+    # Title
+    title_surf = title_font.render("Top 10 Scores", True, WHITE)
+    title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 200))
+    screen_surface.blit(title_surf, title_rect)
+
+    start_y_scores = title_rect.bottom + 40
+    line_height = score_font.get_height() + 10
+
+    if not top_scores_list:
+        no_scores_surf = info_font.render("No high scores yet!", True, WHITE)
+        no_scores_rect = no_scores_surf.get_rect(center=(SCREEN_WIDTH // 2, start_y_scores + line_height * 2))
+        screen_surface.blit(no_scores_surf, no_scores_rect)
+    else:
+        rank_x = SCREEN_WIDTH // 2 - 250
+        name_x = SCREEN_WIDTH // 2 - 150
+        score_val_x = SCREEN_WIDTH // 2 + 100
+        # time_str_x = SCREEN_WIDTH // 2 + 250 # Time column commented out for now
+
+        header_rank_surf = score_font.render("Rank", True, YELLOW)
+        header_name_surf = score_font.render("Name", True, YELLOW)
+        header_score_surf = score_font.render("Score", True, YELLOW)
+
+        screen_surface.blit(header_rank_surf, (rank_x, start_y_scores))
+        screen_surface.blit(header_name_surf, (name_x, start_y_scores))
+        # For score header, position its right edge at score_val_x + some padding for values, or center it above values
+        screen_surface.blit(header_score_surf, (score_val_x + 50 - header_score_surf.get_width(), start_y_scores))
+
+
+        current_y = start_y_scores + line_height
+
+        for i, entry in enumerate(top_scores_list):
+            if i >= 10:
+                break
+
+            rank_str = f"{i + 1}."
+            username_str = entry.get("username", "N/A")[:15] # Truncate username if too long
+            score_str = str(entry.get("score", 0))
+
+            rank_surf = score_font.render(rank_str, True, WHITE)
+            name_surf = score_font.render(username_str, True, WHITE)
+            score_val_surf = score_font.render(score_str, True, WHITE)
+
+            screen_surface.blit(rank_surf, (rank_x, current_y))
+            screen_surface.blit(name_surf, (name_x, current_y))
+            # Align score value to the right
+            screen_surface.blit(score_val_surf, (score_val_x + 50 - score_val_surf.get_width(), current_y))
+
+            current_y += line_height
+
+    instruction_y = SCREEN_HEIGHT - 100
+    instruction_surf = info_font.render("Press any key to Restart, ESC to Quit", True, WHITE)
+    instruction_rect = instruction_surf.get_rect(center=(SCREEN_WIDTH // 2, instruction_y))
+    screen_surface.blit(instruction_surf, instruction_rect)
+
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Changed best_score_data_dict to top_scores_list
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
@@ -1565,7 +1647,7 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
     draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val,
                    next_piece_1_obj if not game_over_flag else None,
                    next_piece_2_obj if not game_over_flag else None,
-                   lines_for_current_level_val, ai_mode_flag, formatted_time_str, best_score_data_dict)
+                   lines_for_current_level_val, ai_mode_flag, formatted_time_str, top_scores_list) # Pass top_scores_list
 
     if game_phase_str == "GETTING_USERNAME":
         # Draw "GAME OVER" and final score first
@@ -1658,6 +1740,14 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
         close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 140)) # Adjusted Y further down
         screen_surface.blit(close_hint_surf, close_hint_rect)
+    elif game_phase_str == "HIGH_SCORE_DISPLAY":
+        fonts_for_scores = {
+            "title": GAME_OVER_FONT,
+            "score": INFO_FONT,
+            "info": INFO_FONT
+        }
+        _draw_high_score_screen(screen_surface, top_scores_list, fonts_for_scores)
+
 
     pygame.display.flip()
     if clock_obj: # Ensure clock_obj is provided before ticking
@@ -1798,11 +1888,13 @@ def main():
             }
             _update_and_save_top_scores(new_entry)
             top_scores_list = _load_best_score() # Reload to get the updated list for display
-            game_phase = "GAME_OVER" # Transition to regular game over screen after saving
+            game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
             current_username_input = ""
+            if DEBUG_MODE: print(f"DEBUG MainLoop: Score saved. game_phase set to '{game_phase}'.")
         elif action_request == "SKIP_SAVE":
-            game_phase = "GAME_OVER"
+            game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
             current_username_input = ""
+            if DEBUG_MODE: print(f"DEBUG MainLoop: Score save skipped. game_phase set to '{game_phase}'.")
 
         prev_game_over = game_over
 
@@ -1859,7 +1951,7 @@ def main():
                 current_username_input = ""
                 if DEBUG_MODE: print(f"DEBUG MainLoop: New top 10 score! game_phase set to '{game_phase}'.")
             else:
-                game_phase = "GAME_OVER"
+                game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
                 if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {score}). game_phase set to '{game_phase}'.")
 
         # Drawing
