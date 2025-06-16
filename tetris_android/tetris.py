@@ -784,6 +784,41 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
+def load_config():
+    filename = "config.json"
+    default_config = {"sound_enabled": True} # Default if file missing/corrupt
+
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            # Basic validation for expected structure
+            if isinstance(data, dict) and "sound_enabled" in data and isinstance(data["sound_enabled"], bool):
+                if DEBUG_MODE: print(f"Config loaded from {filename}: {data}")
+                return data
+            else:
+                if DEBUG_MODE: print(f"Warning: {filename} has invalid structure. Using defaults.")
+                return default_config
+    except FileNotFoundError:
+        if DEBUG_MODE: print(f"Info: {filename} not found. Using default config.")
+        return default_config
+    except json.JSONDecodeError:
+        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults.")
+        return default_config
+    except Exception as e:
+        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults.")
+        return default_config
+
+def save_config(config_data):
+    filename = "config.json"
+    try:
+        with open(filename, 'w') as f:
+            json.dump(config_data, f, indent=4) # Save with indentation for readability
+        if DEBUG_MODE: print(f"Config saved to {filename}: {config_data}")
+    except IOError as e:
+        if DEBUG_MODE: print(f"Error saving config to {filename}: {e}")
+    except Exception as e: # Catch any other unexpected errors during save
+        if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filename}: {e}")
+
 def _load_best_score():
     filename = "best_score.json"
     default_score_data = {"username": "N/A", "score": 0, "time_str": "00:00"}
@@ -901,7 +936,8 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_s:
                     sound_enabled_flag = not sound_enabled_flag
-                    if DEBUG_MODE: print(f"Sound enabled toggled to: {sound_enabled_flag} via config menu.")
+                    save_config({"sound_enabled": sound_enabled_flag}) # Save the new state
+                    if DEBUG_MODE: print(f"Sound setting toggled. Called save_config with: {sound_enabled_flag}")
                     # Potentially play a sound here to indicate change, if sound is now ON
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
@@ -1463,6 +1499,19 @@ def main():
         print("DEBUG MODE ENABLED")
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
+    global sound_enabled # Ensure main uses and can modify the global sound_enabled
+
+    # Load configuration
+    loaded_config = load_config()
+    # Ensure loaded_config is a dictionary and sound_enabled is a key.
+    # load_config() as implemented should always return a dict with 'sound_enabled'.
+    if isinstance(loaded_config, dict) and "sound_enabled" in loaded_config:
+        sound_enabled = loaded_config["sound_enabled"]
+    else:
+        # This case should ideally not be reached if load_config works as specified
+        if DEBUG_MODE: print("Warning: load_config did not return expected dictionary format. Using default sound setting True.")
+        sound_enabled = True # Default to True as a safeguard
+
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
     # Pre-render help text surfaces (using appropriate fonts)
@@ -1504,9 +1553,9 @@ def main():
     running = True
     help_screen_active = False
     config_menu_active = False # New variable for config menu
-    # sound_enabled is now a global, initialized at module level. No need to init here.
-    # However, main loop needs to update the global one if it's changed by _handle_events
-    global sound_enabled # Declare that main will use the global sound_enabled
+    # sound_enabled is now a global, initialized by load_config() just above.
+    # The global declaration for sound_enabled is now placed higher, before load_config() call.
+    # No need for another `global sound_enabled` here as it's already done before load_config.
     game_phase = "PLAYING"
     current_username_input = ""
     formatted_time = ""
