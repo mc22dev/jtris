@@ -94,6 +94,7 @@ SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
 SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
 SOUND_DIR = "sounds"
+sound_enabled = True # Initialize sound_enabled globally at module level might be simpler
 
 def load_sound(filename):
     path = os.path.join(SOUND_DIR, filename)
@@ -102,6 +103,9 @@ def load_sound(filename):
     except pygame.error as e: print(f"Error loading sound {filename}: {e}"); return None
 
 def play_sound(sound_name):
+    global sound_enabled # Access the global sound_enabled state
+    if not sound_enabled:
+        return
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
 
 class Piece:
@@ -822,7 +826,7 @@ def _save_best_score(username, score, time_str):
     except Exception as e:
         print(f"Error saving best score to {filename}: {e}")
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str):
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_enabled_flag): # Added new flags
     action_request = None
     # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
 
@@ -836,21 +840,82 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
             help_screen_active_flag = not help_screen_active_flag
             if help_screen_active_flag:
+                if not game_paused_flag: # Only set time_at_pause if game wasn't already paused by something else (e.g. config menu)
+                    time_at_pause_val = time.time()
                 game_paused_flag = True
                 if DEBUG_MODE: print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
-            else:
-                game_paused_flag = False
-                if DEBUG_MODE: print("Help screen NEWLY DEACTIVATED. game_paused_flag set to False.")
+            else: # Deactivating help screen
+                if not config_menu_active_flag: # Only unpause if config menu is also not active
+                    game_paused_flag = False
+                    if time_at_pause_val > 0: # Ensure game was actually paused
+                        total_paused_duration_val += time.time() - time_at_pause_val
+                        time_at_pause_val = 0 # Reset time_at_pause_val
+                    last_fall_time_val = time.time() # Reset fall timer
+                    last_ai_move_time_val = time.time() # Reset AI timer
+                if DEBUG_MODE: print("Help screen NEWLY DEACTIVATED. game_paused_flag logic applied.")
             continue
 
-        # Close Help with ESC
+        # Config Menu Toggle (C)
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_c:
+            # If config menu is currently active, and ESC is pressed, this block handles it.
+            # If 'c' is pressed again, it also toggles.
+            if config_menu_active_flag and event.key == pygame.K_c : # Already handled by the config_menu_active_flag block later if menu is open
+                 pass # Let the dedicated config menu handler do its job to avoid double processing
+            else:
+                config_menu_active_flag = not config_menu_active_flag
+                if config_menu_active_flag:
+                    if not game_paused_flag: # Only set time_at_pause if game wasn't already paused
+                        time_at_pause_val = time.time()
+                    game_paused_flag = True
+                    if DEBUG_MODE: print("Config menu NEWLY ACTIVATED by C. game_paused_flag set to True.")
+                else: # Deactivating config menu by 'C' key (when it's not open and gets toggled off - this case might be redundant if it implies it was already false)
+                    if not help_screen_active_flag: # Only unpause if help screen is also not active
+                        game_paused_flag = False
+                        if time_at_pause_val > 0:
+                            total_paused_duration_val += time.time() - time_at_pause_val
+                            time_at_pause_val = 0 # Reset time_at_pause_val
+                        last_fall_time_val = time.time() # Reset fall timer
+                        last_ai_move_time_val = time.time() # Reset AI timer
+                    if DEBUG_MODE: print("Config menu NEWLY DEACTIVATED by C. game_paused_flag logic applied.")
+            continue
+
+
+        # Close Help with ESC (respects config menu)
         if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             help_screen_active_flag = False
-            game_paused_flag = False # Unpause game
-            if DEBUG_MODE: print("Help screen deactivated by ESC")
+            if not config_menu_active_flag: # Only unpause if config menu is also not active
+                game_paused_flag = False
+                if time_at_pause_val > 0:
+                    total_paused_duration_val += time.time() - time_at_pause_val
+                    time_at_pause_val = 0 # Reset time_at_pause_val
+                last_fall_time_val = time.time()
+                last_ai_move_time_val = time.time()
+            if DEBUG_MODE: print("Help screen deactivated by ESC. game_paused_flag logic applied.")
             continue
 
-        if help_screen_active_flag: # If help is active, skip all other game inputs
+        if help_screen_active_flag: # If help is active, skip all other game inputs below this
+            continue
+
+        # Config Menu Active Handling (takes precedence over game phases if active, but after help)
+        if config_menu_active_flag:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    sound_enabled_flag = not sound_enabled_flag
+                    if DEBUG_MODE: print(f"Sound enabled toggled to: {sound_enabled_flag} via config menu.")
+                    # Potentially play a sound here to indicate change, if sound is now ON
+                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
+                    config_menu_active_flag = False
+                    # Only unpause if help screen is also not active
+                    if not help_screen_active_flag:
+                        game_paused_flag = False
+                        # Correctly update pause duration and game timers
+                        if time_at_pause_val > 0: # Ensure game was actually paused
+                           total_paused_duration_val += time.time() - time_at_pause_val
+                           time_at_pause_val = 0 # Reset time_at_pause_val
+                        last_fall_time_val = time.time()
+                        last_ai_move_time_val = time.time()
+                    if DEBUG_MODE: print("Config menu DEACTIVATED by ESC/C key. game_paused_flag logic applied.")
+            # IMPORTANT: Consume all events while config menu is active so they don't bleed through
             continue
 
         # Phase-specific event handling
@@ -877,18 +942,27 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         elif game_phase_str == "PLAYING":
             # Pause Toggle (P key)
             if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
-                game_paused_flag = not game_paused_flag
-                if game_paused_flag:
-                    time_at_pause_val = time.time()
+                game_paused_flag = not game_paused_flag # Toggle the pause state first
+                if game_paused_flag: # Game is now paused by 'P'
+                    time_at_pause_val = time.time() # Record time when paused
                     if DEBUG_MODE: print(f"Game Paused (P key). Paused: {game_paused_flag}")
-                else: # Unpausing
-                    total_paused_duration_val += time.time() - time_at_pause_val
-                    last_fall_time_val = time.time()
-                    last_ai_move_time_val = time.time()
-                    if DEBUG_MODE: print(f"Game Resumed (P key). Paused: {game_paused_flag}")
+                else: # Attempting to unpause via 'P'
+                    if not help_screen_active_flag and not config_menu_active_flag: # Only truly unpause if no other modal is active
+                        if time_at_pause_val > 0: # Ensure game was actually paused
+                            total_paused_duration_val += time.time() - time_at_pause_val
+                            time_at_pause_val = 0 # Reset pause timer
+                        last_fall_time_val = time.time()
+                        last_ai_move_time_val = time.time()
+                        if DEBUG_MODE: print(f"Game Resumed (P key) - All clear. Paused: {game_paused_flag}")
+                    else:
+                        if DEBUG_MODE: print(f"Game Unpause (P key) deferred - Help/Config active. Paused: {game_paused_flag} (still true effectively, or will be set by other modals)")
+                        # game_paused_flag remains False from the toggle, but other modals will keep it effectively paused or re-pause it.
+                        # If other modals are active, they should be the ones to set game_paused_flag back to True if they are opened,
+                        # or handle the unpausing when they are closed.
+                        # The main thing is that total_paused_duration is not updated yet if another modal is active.
                 continue
 
-            if not game_paused_flag: # Only if game is not paused by 'P' (or help screen, or joystick pause)
+            if not game_paused_flag: # Only if game is not paused by 'P' (or help screen, or config menu, or joystick pause)
                 # AI Mode Toggle (A key)
                 if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
                     ai_mode_flag = not ai_mode_flag
@@ -970,15 +1044,21 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             button = event.button
             if button == 7: # Start Button
                 if game_phase_str == "PLAYING": # Pause/Resume only during active play
-                    game_paused_flag = not game_paused_flag
-                    if game_paused_flag:
+                    game_paused_flag = not game_paused_flag # Toggle the pause state
+                    if game_paused_flag: # Game is now paused by Joystick
                         time_at_pause_val = time.time()
                         if DEBUG_MODE: print(f"Game Paused (Joystick Start). Paused: {game_paused_flag}")
-                    else: # Unpausing
-                        total_paused_duration_val += time.time() - time_at_pause_val
-                        last_fall_time_val = time.time()
-                        last_ai_move_time_val = time.time()
-                        if DEBUG_MODE: print(f"Game Resumed (Joystick Start). Paused: {game_paused_flag}")
+                    else: # Attempting to unpause via Joystick
+                        if not help_screen_active_flag and not config_menu_active_flag: # Only truly unpause if no other modal is active
+                            if time_at_pause_val > 0: # Ensure game was actually paused
+                                total_paused_duration_val += time.time() - time_at_pause_val
+                                time_at_pause_val = 0 # Reset pause timer
+                            last_fall_time_val = time.time()
+                            last_ai_move_time_val = time.time()
+                            if DEBUG_MODE: print(f"Game Resumed (Joystick Start) - All clear. Paused: {game_paused_flag}")
+                        else:
+                            if DEBUG_MODE: print(f"Game Unpause (Joystick Start) deferred - Help/Config active. Paused: {game_paused_flag} (still true effectively)")
+                            # As with 'P' key, game_paused_flag is False from toggle, but timing updates are deferred.
                     continue
             elif button == 6: # Select Button
                  if game_phase_str == "PLAYING" and not game_paused_flag: # AI toggle only if playing and not paused
@@ -1002,6 +1082,8 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "last_ai_move_time": last_ai_move_time_val,
         "action_request": action_request,
         "help_screen_active": help_screen_active_flag,
+        "config_menu_active": config_menu_active_flag, # Added
+        "sound_enabled": sound_enabled_flag,           # Added
         "current_username_input": current_username_str,
         "game_phase_str": game_phase_str
     }
@@ -1256,7 +1338,7 @@ def _draw_help_screen(screen_surface, help_text_surfaces_list):
         screen_surface.blit(surface, (text_x, current_y))
         current_y += surface.get_height() + line_padding
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val):
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag): # Added new flags
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
@@ -1332,7 +1414,8 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         screen_surface.blit(quit_text_surf, text_rect_quit)
 
     # Display PAUSED message if game is paused (and not game over, and help screen not active, and not getting username)
-    if game_paused_flag and not game_over_flag and not help_screen_active_flag and game_phase_str != "GETTING_USERNAME":
+    # This condition needs to be more specific now: only show generic "PAUSED" if no other modal is active.
+    if game_paused_flag and not game_over_flag and not help_screen_active_flag and not config_menu_active_flag and game_phase_str != "GETTING_USERNAME":
         pause_text_surface = GAME_OVER_FONT.render("PAUSED", True, YELLOW) # Using GAME_OVER_FONT for size
         text_rect_pause = pause_text_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         screen_surface.blit(pause_text_surface, text_rect_pause)
@@ -1340,6 +1423,29 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
     # Draw help screen if active (on top of everything else)
     if help_screen_active_flag:
         _draw_help_screen(screen_surface, help_text_surfaces_list) # Ensure this uses the passed parameter
+    elif config_menu_active_flag: # Use elif as help and config shouldn't be simultaneously active based on event logic
+        # Draw Overlay for Config Menu
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180)) # Black with ~70% opacity
+        screen_surface.blit(overlay, (0,0))
+
+        # Config Menu Title
+        # Assuming GAME_OVER_FONT and INFO_FONT are loaded globally and available
+        title_text_surf = GAME_OVER_FONT.render("CONFIGURATION MENU", True, WHITE)
+        title_rect = title_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+        screen_surface.blit(title_text_surf, title_rect)
+
+        # Sound Option Text
+        sound_status_str = "ON" if sound_enabled_flag else "OFF"
+        sound_option_text_str = f"Sound: {sound_status_str} (Press S to toggle)"
+        sound_option_surf = INFO_FONT.render(sound_option_text_str, True, WHITE)
+        sound_option_rect = sound_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        screen_surface.blit(sound_option_surf, sound_option_rect)
+
+        # Close Menu Hint
+        close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
+        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100))
+        screen_surface.blit(close_hint_surf, close_hint_rect)
 
     pygame.display.flip()
     if clock_obj: # Ensure clock_obj is provided before ticking
@@ -1396,8 +1502,11 @@ def main():
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
 
     running = True
-    running = True
     help_screen_active = False
+    config_menu_active = False # New variable for config menu
+    # sound_enabled is now a global, initialized at module level. No need to init here.
+    # However, main loop needs to update the global one if it's changed by _handle_events
+    global sound_enabled # Declare that main will use the global sound_enabled
     game_phase = "PLAYING"
     current_username_input = ""
     formatted_time = ""
@@ -1412,7 +1521,7 @@ def main():
             current_piece, game_grid, running,
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
             joystick, joystick_enabled, help_screen_active,
-            game_phase, current_username_input
+            game_phase, current_username_input, config_menu_active, sound_enabled # Pass current global states
         )
 
         running = event_handling_result["running"]
@@ -1426,6 +1535,8 @@ def main():
         last_ai_move_time = event_handling_result["last_ai_move_time"]
         action_request = event_handling_result["action_request"]
         help_screen_active = event_handling_result["help_screen_active"]
+        config_menu_active = event_handling_result["config_menu_active"] # Update local var from return
+        sound_enabled = event_handling_result["sound_enabled"]           # Update global var from return
         current_username_input = event_handling_result["current_username_input"]
         # game_phase is now primarily managed by main based on action_request or game_over state changes
 
@@ -1511,7 +1622,8 @@ def main():
             formatted_time, game_over, game_paused, clock,
             help_screen_active, help_text_surfaces,
             game_phase, current_username_input, best_score_data,
-            lines_being_animated, line_animation_timer # Pass animation states to drawing
+            lines_being_animated, line_animation_timer, # Original animation params
+            config_menu_active, sound_enabled # Pass new flags
         )
     pygame.mixer.quit()
     pygame.font.quit()
