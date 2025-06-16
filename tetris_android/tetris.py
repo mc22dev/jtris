@@ -385,7 +385,7 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
 
 def clone_grid(grid_data):
     """Creates and returns a deep copy of the given game grid."""
-    return copy.deepcopy(grid_data)
+    return [row[:] for row in grid_data]
 
 def _get_cleared_lines_and_new_grid(grid_copy_to_check):
     """
@@ -1717,3 +1717,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+[end of tetris_android/tetris.py]
