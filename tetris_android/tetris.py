@@ -261,18 +261,18 @@ def format_time(total_seconds):
     seconds = int(total_seconds % 60) # Calculate remaining seconds
     return f"{minutes:02d}:{seconds:02d}" # Format as MM:SS with leading zeros
 
-def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
+def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
     global TITLE_FONT
     if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE)
 
-    next_text = TITLE_FONT.render("Next:", True, WHITE)
-    screen.blit(next_text, (x_pos, y_pos))
+    title_surface = TITLE_FONT.render(title_str, True, WHITE)
+    screen.blit(title_surface, (x_pos, y_pos))
 
-    box_y_pos = y_pos + TITLE_FONT_SIZE + 5
+    box_y_pos = y_pos + title_surface.get_height() + 5
     pygame.draw.rect(screen, GREY, (x_pos, box_y_pos, NEXT_PIECE_BOX_SIZE, NEXT_PIECE_BOX_SIZE), 1)
 
-    if next_piece:
-        shape_coords = next_piece.get_shape_for_preview()
+    if piece_to_draw:
+        shape_coords = piece_to_draw.get_shape_for_preview()
 
         min_r_offset = min(r for r,c in shape_coords) if shape_coords else 0
         max_r_offset = max(r for r,c in shape_coords) if shape_coords else 0
@@ -288,13 +288,14 @@ def draw_next_piece_area(screen, next_piece, x_pos, y_pos):
         for r_offset, c_offset in shape_coords:
             block_x = start_draw_x + (c_offset - min_c_offset) * NEXT_PIECE_BLOCK_SIZE
             block_y = start_draw_y + (r_offset - min_r_offset) * NEXT_PIECE_BLOCK_SIZE
-            pygame.draw.rect(screen, next_piece.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
+            pygame.draw.rect(screen, piece_to_draw.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
 
 
-def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_current_level, ai_mode_is_active, formatted_time_str, best_score_data_dict): # Added best_score_data_dict
-    global SCORE_FONT, INFO_FONT
+def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, next_piece_2_obj, lines_for_current_level, ai_mode_is_active, formatted_time_str, best_score_data_dict): # Updated next piece params
+    global SCORE_FONT, INFO_FONT, TITLE_FONT # Ensure TITLE_FONT is global here for height calculation
     if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
     if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
+    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE) # Load if not already
 
     current_y = UI_INFO_START_Y
     ui_start_x = GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE + UI_INFO_X_OFFSET
@@ -342,9 +343,18 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_p, lines_for_cu
         draw_level_progress_bar(screen, lines_for_current_level, LINES_PER_LEVEL, bar_outer_rect, progress_bar_colors, INFO_FONT, WHITE) # Call the function to draw the progress bar
 
     # Update current_y to be below the progress bar for the next UI element
-    current_y = progress_bar_rect_y + PROGRESS_BAR_HEIGHT + UI_INFO_LINE_SPACING * 2 # Update current_y to position elements below the progress bar
+    current_y = progress_bar_rect_y + PROGRESS_BAR_HEIGHT + UI_INFO_LINE_SPACING * 2
 
-    draw_next_piece_area(screen, next_p, ui_start_x, current_y)
+    # Draw First Next Piece
+    draw_next_piece_area(screen, next_piece_1_obj, ui_start_x, current_y, "Next 1:")
+
+    title_height_estimate = TITLE_FONT.get_height()
+    current_y += title_height_estimate + 5 + NEXT_PIECE_BOX_SIZE + UI_INFO_LINE_SPACING * 2
+
+    # Draw Second Next Piece
+    draw_next_piece_area(screen, next_piece_2_obj, ui_start_x, current_y, "Next 2:")
+
+    # current_y += title_height_estimate + 5 + NEXT_PIECE_BOX_SIZE + UI_INFO_LINE_SPACING # If more elements followed
 
 
 # --- New Drawing Function for Level Progress Bar ---
@@ -720,7 +730,8 @@ def reset_game_state():
     """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
     current_piece = spawn_piece_at_start()
-    next_piece = Piece(0, 0) # Piece class handles random shape_type if None
+    next_piece_1 = Piece(0, 0) # Piece class handles random shape_type if None
+    next_piece_2 = Piece(0, 0) # Second next piece
 
     game_over = False
     if not is_valid_position(current_piece, game_grid):
@@ -748,7 +759,8 @@ def reset_game_state():
     total_paused_duration = 0.0 # Accumulates total time spent paused
 
     return {
-        "game_grid": game_grid, "current_piece": current_piece, "next_piece": next_piece,
+        "game_grid": game_grid, "current_piece": current_piece,
+        "next_piece_1": next_piece_1, "next_piece_2": next_piece_2,
         "score": score, "current_level": current_level, "total_lines_cleared": total_lines_cleared,
         "lines_for_current_level": lines_for_current_level, "game_over": game_over,
         "current_fall_speed": current_fall_speed, "last_fall_time": last_fall_time,
@@ -767,7 +779,8 @@ def _handle_restart_action():
 def _unpack_game_state(game_state_dict):
     game_grid = game_state_dict["game_grid"]
     current_piece = game_state_dict["current_piece"]
-    next_piece = game_state_dict["next_piece"]
+    next_piece_1 = game_state_dict["next_piece_1"]
+    next_piece_2 = game_state_dict["next_piece_2"]
     score = game_state_dict["score"]
     current_level = game_state_dict["current_level"]
     total_lines_cleared = game_state_dict["total_lines_cleared"]
@@ -785,7 +798,7 @@ def _unpack_game_state(game_state_dict):
     time_at_pause = game_state_dict["time_at_pause"]
     total_paused_duration = game_state_dict["total_paused_duration"]
 
-    return (game_grid, current_piece, next_piece, score, current_level,
+    return (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
             total_lines_cleared, lines_for_current_level, game_over,
             current_fall_speed, last_fall_time, soft_drop_active,
             game_over_sound_played, ai_mode_active, last_ai_move_time,
@@ -1167,7 +1180,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "game_phase_str": game_phase_str
     }
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag): # Added line_blink_enabled_flag
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag): # Added line_blink_enabled_flag, next_piece_1_obj, next_piece_2_obj
     # --- Game Logic (AI, Piece Movement, Physics) ---
 
     if game_phase_str == "LINE_ANIMATION":
@@ -1194,11 +1207,14 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
 
             # Spawn next piece (only if not game over from garbage)
             if not game_over_flag:
-                current_piece_obj = next_piece_obj
+                current_piece_obj = next_piece_1_obj # NEW
                 if current_piece_obj:
                     current_piece_obj.x = GRID_WIDTH // 2
                     current_piece_obj.y = 0
-                next_piece_obj = Piece(0, 0)
+
+                next_piece_1_obj = next_piece_2_obj # NEW
+                next_piece_2_obj = Piece(0, 0)   # NEW - Generate a new piece for the second slot
+
                 if not is_valid_position(current_piece_obj, game_grid_data):
                     game_over_flag = True
                     current_piece_obj = None
@@ -1213,7 +1229,7 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
         if ai_mode_flag and not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
             if time.time() - last_ai_move_time_val > AI_MOVE_DELAY:
                 grid_copy_for_ai = clone_grid(game_grid_data)
-                best_move_info = find_best_move(grid_copy_for_ai, current_piece_obj, next_piece_obj)
+                best_move_info = find_best_move(grid_copy_for_ai, current_piece_obj, next_piece_1_obj) # Use next_piece_1_obj
 
                 if best_move_info and best_move_info['x'] != -1:
                     current_piece_obj.rotation = best_move_info['rotation']
@@ -1246,12 +1262,17 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
                     elif len(cleared_row_indices) > 0: play_sound("line_clear")
                     current_piece_obj = None # Piece locked, wait for animation
                 else: # No lines cleared
-                    current_piece_obj = next_piece_obj
+                    current_piece_obj = next_piece_1_obj # NEW
                     if current_piece_obj:
-                        current_piece_obj.x = GRID_WIDTH // 2; current_piece_obj.y = 0
-                    next_piece_obj = Piece(0,0)
+                        current_piece_obj.x = GRID_WIDTH // 2
+                        current_piece_obj.y = 0
+
+                    next_piece_1_obj = next_piece_2_obj # NEW
+                    next_piece_2_obj = Piece(0, 0)   # NEW
+
                     if not is_valid_position(current_piece_obj, game_grid_data):
-                        game_over_flag = True; current_piece_obj = None
+                        game_over_flag = True
+                        current_piece_obj = None
 
                 last_fall_time_val = time.time()
                 soft_drop_flag = False
@@ -1279,12 +1300,17 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
                         elif len(cleared_row_indices) > 0: play_sound("line_clear")
                         current_piece_obj = None # Piece locked, wait for animation
                     else: # No lines cleared
-                        current_piece_obj = next_piece_obj
+                        current_piece_obj = next_piece_1_obj # NEW
                         if current_piece_obj:
-                            current_piece_obj.x = GRID_WIDTH // 2; current_piece_obj.y = 0
-                        next_piece_obj = Piece(0,0)
+                            current_piece_obj.x = GRID_WIDTH // 2
+                            current_piece_obj.y = 0
+
+                        next_piece_1_obj = next_piece_2_obj # NEW
+                        next_piece_2_obj = Piece(0, 0)   # NEW
+
                         if not is_valid_position(current_piece_obj, game_grid_data):
-                            game_over_flag = True; current_piece_obj = None
+                            game_over_flag = True
+                            current_piece_obj = None
 
                     last_fall_time_val = time.time()
                     soft_drop_flag = False # Reset soft drop after piece lands
@@ -1314,7 +1340,8 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
     return {
         "game_over": game_over_flag,
         "current_piece": current_piece_obj, # Potentially set to None
-        "next_piece": next_piece_obj,
+        "next_piece_1": next_piece_1_obj, # Updated
+        "next_piece_2": next_piece_2_obj, # Updated
         "game_grid": game_grid_data,
         "score": score_val,
         "current_level": current_level_val,
@@ -1336,7 +1363,8 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
         "total_lines_cleared": total_lines_cleared_val, # Added (potentially modified)
         "lines_for_current_level": lines_for_current_level_val, # Added (potentially modified)
         "current_fall_speed": current_fall_speed_val, # Added (potentially modified)
-        "next_piece": next_piece_obj # Added (potentially modified)
+        "next_piece_1": next_piece_1_obj, # Added (potentially modified)
+        "next_piece_2": next_piece_2_obj # Added (potentially modified)
     }
 
 def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, level, total_lines, lines_for_lvl):
@@ -1423,7 +1451,7 @@ def _draw_help_screen(screen_surface, help_text_surfaces_list):
         screen_surface.blit(surface, (text_x, current_y))
         current_y += surface.get_height() + line_padding
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag, next_piece_1_obj, next_piece_2_obj
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
@@ -1457,7 +1485,16 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
     if not game_over_flag and current_piece_obj and game_phase_str != "GETTING_USERNAME" and game_phase_str != "LINE_ANIMATION": # Don't draw falling piece during name input or line animation
          draw_current_piece_on_grid(screen_surface, current_piece_obj)
 
-    draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val, next_piece_obj if not game_over_flag else None, lines_for_current_level_val, ai_mode_flag, formatted_time_str, best_score_data_dict)
+    # Pass next_piece_1_obj and next_piece_2_obj to draw_full_ui
+    # Note: _draw_game_screen receives next_piece_obj which is actually next_piece_1_obj from main loop.
+    # This will be fully harmonized when _draw_game_screen signature is updated, for now, we use what it receives as next_piece_1.
+    # A placeholder or None might be needed for next_piece_2_obj if _draw_game_screen doesn't have it yet.
+    # However, the previous step *should* have updated _draw_game_screen's signature.
+    # Assuming _draw_game_screen has next_piece_1_obj and next_piece_2_obj parameters from main:
+    draw_full_ui(screen_surface, score_val, current_level_val, total_lines_cleared_val,
+                   next_piece_1_obj if not game_over_flag else None,
+                   next_piece_2_obj if not game_over_flag else None,
+                   lines_for_current_level_val, ai_mode_flag, formatted_time_str, best_score_data_dict)
 
     if game_phase_str == "GETTING_USERNAME":
         # Draw "GAME OVER" and final score first
@@ -1617,7 +1654,7 @@ def main():
 
     # Initial game state setup
     game_state_dict = reset_game_state()
-    (game_grid, current_piece, next_piece, score, current_level,
+    (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
      current_fall_speed, last_fall_time, soft_drop_active,
      game_over_sound_played, ai_mode_active, last_ai_move_time,
@@ -1670,7 +1707,7 @@ def main():
 
         if action_request == "RESTART":
             game_state_dict = _handle_restart_action()
-            (game_grid, current_piece, next_piece, score, current_level,
+            (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
              total_lines_cleared, lines_for_current_level, game_over,
              current_fall_speed, last_fall_time, soft_drop_active,
              game_over_sound_played, ai_mode_active, last_ai_move_time,
@@ -1694,7 +1731,7 @@ def main():
         prev_game_over = game_over
 
         game_logic_result = _update_game_state(
-            game_over, game_paused, ai_mode_active, current_piece, next_piece,
+            game_over, game_paused, ai_mode_active, current_piece, next_piece_1, next_piece_2, # Updated next_piece args
             game_grid, score, current_level, total_lines_cleared,
             lines_for_current_level, current_fall_speed, last_fall_time,
             soft_drop_active, game_over_sound_played, last_ai_move_time,
@@ -1706,7 +1743,8 @@ def main():
 
         game_over = game_logic_result["game_over"]
         current_piece = game_logic_result["current_piece"]
-        next_piece = game_logic_result["next_piece"]
+        next_piece_1 = game_logic_result["next_piece_1"] # Unpack next_piece_1
+        next_piece_2 = game_logic_result["next_piece_2"] # Unpack next_piece_2
         game_grid = game_logic_result["game_grid"]
         score = game_logic_result["score"]
         current_level = game_logic_result["current_level"]
@@ -1743,14 +1781,14 @@ def main():
 
         # Drawing
         _draw_game_screen(
-            screen, game_grid, current_piece, next_piece, score, current_level,
+            screen, game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, # Pass next_piece_1 and next_piece_2
             total_lines_cleared, lines_for_current_level, ai_mode_active,
             formatted_time, game_over, game_paused, clock,
             help_screen_active, help_text_surfaces,
             game_phase, current_username_input, best_score_data,
             lines_being_animated, line_animation_timer,
             config_menu_active, sound_enabled, shadow_enabled,
-            line_blink_enabled  # Add this line
+            line_blink_enabled
         )
     pygame.mixer.quit()
     pygame.font.quit()
