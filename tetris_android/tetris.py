@@ -1879,7 +1879,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-[end of tetris_android/tetris.py]
-
-[end of tetris_android/tetris.py]
