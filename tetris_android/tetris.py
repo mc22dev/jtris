@@ -291,7 +291,7 @@ def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
             pygame.draw.rect(screen, piece_to_draw.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
 
 
-def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, next_piece_2_obj, lines_for_current_level, ai_mode_is_active, formatted_time_str, best_score_data_dict): # Updated next piece params
+def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, next_piece_2_obj, lines_for_current_level, ai_mode_is_active, formatted_time_str, top_scores_list): # Updated next piece params
     global SCORE_FONT, INFO_FONT, TITLE_FONT # Ensure TITLE_FONT is global here for height calculation
     if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
     if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
@@ -325,11 +325,15 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, ne
     current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Update y for next element
 
     # Display Best Score
-    if best_score_data_dict and isinstance(best_score_data_dict.get("score"), int) and best_score_data_dict["score"] > 0:
-        best_score_text = f"Best: {best_score_data_dict['username']} - {best_score_data_dict['score']}"
-        best_score_surface = INFO_FONT.render(best_score_text, True, YELLOW) # Using YELLOW for emphasis
-        screen.blit(best_score_surface, (ui_start_x, current_y))
-        current_y += INFO_FONT.get_height() + UI_INFO_LINE_SPACING
+    if top_scores_list: # Check if the list is not empty
+        top_score_entry = top_scores_list[0] # Get the first entry (highest score)
+        # Ensure the entry is valid before trying to access keys
+        if isinstance(top_score_entry, dict) and "username" in top_score_entry and "score" in top_score_entry:
+            if top_score_entry.get("score", 0) > 0: # Only display if the top score is greater than 0
+                best_score_text = f"Best: {top_score_entry['username']} - {top_score_entry['score']}"
+                best_score_surface = INFO_FONT.render(best_score_text, True, YELLOW)
+                screen.blit(best_score_surface, (ui_start_x, current_y))
+                current_y += INFO_FONT.get_height() + UI_INFO_LINE_SPACING
 
     # Draw Level Progress Bar
     # Text label for progress bar is drawn by draw_level_progress_bar above the bar itself
@@ -865,47 +869,114 @@ def save_config(config_data):
     except Exception as e: # Catch any other unexpected errors during save
         if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filename}: {e}")
 
+def _update_and_save_top_scores(new_score_entry):
+    filename = "best_score.json"
+
+    # 1. Load existing scores
+    current_top_scores = []
+    try:
+        with open(filename, 'r') as f:
+            loaded_data = json.load(f)
+            if isinstance(loaded_data, list):
+                # Basic validation for entries when loading for update
+                for entry in loaded_data:
+                    if isinstance(entry, dict) and \
+                       "username" in entry and isinstance(entry["username"], str) and \
+                       "score" in entry and isinstance(entry["score"], int) and \
+                       "time_str" in entry and isinstance(entry["time_str"], str):
+                        current_top_scores.append(entry)
+                    # Silently skip invalid entries when loading for update, or log if DEBUG_MODE
+                    elif DEBUG_MODE:
+                        print(f"Skipping invalid entry during load for update: {entry}")
+    except FileNotFoundError:
+        # It's okay if the file doesn't exist, means current_top_scores is empty.
+        if DEBUG_MODE: print(f"Info: {filename} not found while trying to update scores. Starting fresh list.")
+        pass # current_top_scores remains []
+    except json.JSONDecodeError:
+        if DEBUG_MODE: print(f"Warning: Error decoding {filename} during update. Score list might be reset/corrupted if saved now.")
+        # Decide if we should proceed with an empty list or abort. For now, proceed with empty.
+        current_top_scores = []
+    except Exception as e:
+        if DEBUG_MODE: print(f"Warning: Unexpected error loading {filename} for update: {e}. Proceeding with empty list.")
+        current_top_scores = []
+
+    # 2. Add the new score entry
+    current_top_scores.append(new_score_entry)
+
+    # 3. Sort the list by score (descending)
+    #    Use .get("score", 0) for robustness in sorting, though entries added should be valid.
+    current_top_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    # 4. Truncate the list to the top 10 scores
+    updated_top_10_scores = current_top_scores[:10]
+
+    # 5. Write the updated list back to best_score.json
+    try:
+        with open(filename, 'w') as f:
+            json.dump(updated_top_10_scores, f, indent=4)
+        if DEBUG_MODE: print(f"Top scores saved to {filename}: {updated_top_10_scores}")
+    except IOError as e:
+        if DEBUG_MODE: print(f"Error saving top scores to {filename}: {e}")
+    except Exception as e:
+        if DEBUG_MODE: print(f"An unexpected error occurred while saving top scores to {filename}: {e}")
+
 def _load_best_score():
     filename = "best_score.json"
-    default_score_data = {"username": "N/A", "score": 0, "time_str": "00:00"}
+    # Default return is now an empty list if file is problematic
+    default_scores_list = []
 
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
-            # Basic validation for expected structure
-            if isinstance(data, dict) and \
-               "username" in data and \
-               "score" in data and \
-               "time_str" in data and \
-               isinstance(data["score"], int): # Ensure score is an int for comparison
-                return data
-            else:
-                print(f"Warning: {filename} has invalid structure. Using defaults.")
-                return copy.deepcopy(default_score_data)
+
+            # Validate that data is a list
+            if not isinstance(data, list):
+                if DEBUG_MODE: print(f"Warning: {filename} content is not a list. Returning empty list.")
+                return default_scores_list
+
+            valid_scores = []
+            for entry in data:
+                # Validate each entry in the list
+                if isinstance(entry, dict) and \
+                   "username" in entry and isinstance(entry["username"], str) and \
+                   "score" in entry and isinstance(entry["score"], int) and \
+                   "time_str" in entry and isinstance(entry["time_str"], str):
+                    valid_scores.append(entry)
+                else:
+                    if DEBUG_MODE: print(f"Warning: Invalid score entry found in {filename}: {entry}. Skipping.")
+
+            # Sort by score descending and truncate to top 10
+            valid_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
+            top_10_scores = valid_scores[:10]
+
+            if DEBUG_MODE: print(f"Top scores loaded from {filename}: {top_10_scores}")
+            return top_10_scores
+
     except FileNotFoundError:
-        print(f"Info: {filename} not found. A new one will be created if a best score is achieved.")
-        return copy.deepcopy(default_score_data)
+        if DEBUG_MODE: print(f"Info: {filename} not found. Returning empty list.")
+        return default_scores_list # Return copy if mutable, but [] is fine
     except json.JSONDecodeError:
-        print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults.")
-        return copy.deepcopy(default_score_data)
+        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Returning empty list.")
+        return default_scores_list
     except Exception as e:
-        print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults.")
-        return copy.deepcopy(default_score_data)
+        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Returning empty list.")
+        return default_scores_list
 
-def _save_best_score(username, score, time_str):
-    filename = "best_score.json"
-    data_to_save = {
-        "username": username,
-        "score": score,
-        "time_str": time_str
-    }
+# This function was replaced by _update_and_save_top_scores
+# def _save_best_score(username, score, time_str):
+#     filename = "best_score.json"
+#     data_to_save = {
+#         "username": username,
+#         "score": score,
+#         "time_str": time_str
+#     }
 
-    try:
-        with open(filename, 'w') as f:
-            json.dump(data_to_save, f, indent=4)
-        print(f"New best score saved to {filename}.") # Informative print
-    except Exception as e:
-        print(f"Error saving best score to {filename}: {e}")
+#     try:
+#         with open(filename, 'w') as f:
+#             json.dump(data_to_save, f, indent=4)
+#         print(f"New best score saved to {filename}.") # Informative print
+#     except Exception as e:
+#         print(f"Error saving best score to {filename}: {e}")
 
 def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag
     action_request = None
@@ -1627,7 +1698,7 @@ def main():
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
     # Pre-render help text surfaces (using appropriate fonts)
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
-    best_score_data = _load_best_score()
+    top_scores_list = _load_best_score() # Renamed variable
 
 
     if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
@@ -1720,9 +1791,14 @@ def main():
             continue
 
         if action_request == "SAVE_SCORE":
-            _save_best_score(current_username_input, score, final_game_time_str if final_game_time_str else formatted_time)
-            best_score_data = _load_best_score()
-            game_phase = "GAME_OVER"
+            new_entry = {
+                "username": current_username_input,
+                "score": score,
+                "time_str": final_game_time_str if final_game_time_str else formatted_time
+            }
+            _update_and_save_top_scores(new_entry)
+            top_scores_list = _load_best_score() # Reload to get the updated list for display
+            game_phase = "GAME_OVER" # Transition to regular game over screen after saving
             current_username_input = ""
         elif action_request == "SKIP_SAVE":
             game_phase = "GAME_OVER"
@@ -1764,20 +1840,27 @@ def main():
 
         # (This should be after game_over is updated by _update_game_state result,
         # and before the if game_over and not prev_game_over block)
-        if DEBUG_MODE: print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, best_score={best_score_data.get('score')}, current_game_phase='{game_phase}'")
+        if DEBUG_MODE: print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, current_game_phase='{game_phase}'")
 
         # Game Phase Transition Logic (after game logic updates game_over)
         if game_over and not prev_game_over: # Game just ended
-            if DEBUG_MODE: print(f"DEBUG MainLoop: Game JUST ENDED. Comparing score ({score}) with best_score ({best_score_data.get('score')}).")
-            if score > best_score_data["score"]:
+            if DEBUG_MODE: print(f"DEBUG MainLoop: Game JUST ENDED. Checking score ({score}) against top scores.")
+
+            is_top_score = False
+            if len(top_scores_list) < 10: # List has less than 10 scores
+                is_top_score = True
+            # If list has 10 scores, check if current score is higher than the lowest score in the list
+            elif score > 0 and score > top_scores_list[-1].get("score", 0):
+                is_top_score = True
+            # Existing DEBUG print for top_scores_list in _load_best_score will show its state.
+
+            if score > 0 and is_top_score: # Ensure score is positive to prompt for name
                 game_phase = "GETTING_USERNAME"
-                current_username_input = "" # Ensure it's reset
-                if DEBUG_MODE: print(f"DEBUG MainLoop: New best score! game_phase set to '{game_phase}'.")
-                # game_paused is likely already true if help screen was used, or should be set
-                # game_paused = True # Ensure game is paused for name input
+                current_username_input = ""
+                if DEBUG_MODE: print(f"DEBUG MainLoop: New top 10 score! game_phase set to '{game_phase}'.")
             else:
                 game_phase = "GAME_OVER"
-                if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new best score. game_phase set to '{game_phase}'.")
+                if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {score}). game_phase set to '{game_phase}'.")
 
         # Drawing
         _draw_game_screen(
@@ -1785,7 +1868,7 @@ def main():
             total_lines_cleared, lines_for_current_level, ai_mode_active,
             formatted_time, game_over, game_paused, clock,
             help_screen_active, help_text_surfaces,
-            game_phase, current_username_input, best_score_data,
+            game_phase, current_username_input, top_scores_list, # Pass top_scores_list
             lines_being_animated, line_animation_timer,
             config_menu_active, sound_enabled, shadow_enabled,
             line_blink_enabled
@@ -1796,3 +1879,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+[end of tetris_android/tetris.py]
+
+[end of tetris_android/tetris.py]
