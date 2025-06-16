@@ -96,6 +96,7 @@ SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None,
 SOUND_DIR = "sounds"
 sound_enabled = True # Initialize sound_enabled globally at module level
 shadow_enabled = True # Default initial value before config is loaded
+line_blink_enabled = True # Default initial value before config is loaded
 
 def load_sound(filename):
     path = os.path.join(SOUND_DIR, filename)
@@ -148,24 +149,30 @@ def draw_grid_lines(screen):
     for row in range(GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X, GRID_OFFSET_Y + row * BLOCK_SIZE), (GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE))
     for col in range(GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y), (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + GRID_HEIGHT * BLOCK_SIZE))
 
-def draw_blocks(screen, grid_data, lines_being_animated, animation_timer): # Draws landed blocks
+def draw_blocks(screen, grid_data, lines_being_animated, animation_timer, line_blink_enabled_flag): # Draws landed blocks
     for r_idx, row in enumerate(grid_data):
         for c_idx, cell_color in enumerate(row):
             if cell_color != 0:
                 current_block_color = cell_color # Start with the actual color
 
                 if r_idx in lines_being_animated:
-                    progress_frames = LINE_ANIMATION_DURATION - animation_timer
-                    blink_phase_duration = LINE_ANIMATION_DURATION / 10
-                    current_blink_phase = int(progress_frames / blink_phase_duration)
+                    if line_blink_enabled_flag: # Check the new flag
+                        # --- Keep existing blinking logic ---
+                        progress_frames = LINE_ANIMATION_DURATION - animation_timer
+                        blink_phase_duration = LINE_ANIMATION_DURATION / 10
+                        current_blink_phase = int(progress_frames / blink_phase_duration)
 
-                    if current_blink_phase % 2 == 0: # Even phases - show white
-                        current_block_color = WHITE
-                    else: # Odd phases - show original color
-                        current_block_color = cell_color
+                        if current_blink_phase % 2 == 0:
+                            current_block_color = WHITE
+                        else:
+                            current_block_color = cell_color
 
-                    if animation_timer < (LINE_ANIMATION_DURATION / 5): # Last 1/5th of time
-                        current_block_color = BLACK # Make them disappear
+                        if animation_timer < (LINE_ANIMATION_DURATION / 5): # Final phase of blinking
+                            current_block_color = BLACK
+                        # --- End of existing blinking logic ---
+                    else:
+                        # If blinking is disabled, make blocks in clearing lines disappear immediately
+                        current_block_color = BLACK
 
                 pygame.draw.rect(screen, current_block_color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
 
@@ -787,7 +794,7 @@ def _unpack_game_state(game_state_dict):
 
 def load_config():
     filename = "config.json"
-    default_config = {"sound_enabled": True, "shadow_enabled": True} # Updated default
+    default_config = {"sound_enabled": True, "shadow_enabled": True, "line_blink_enabled": True}
 
     try:
         with open(filename, 'r') as f:
@@ -799,6 +806,7 @@ def load_config():
             final_config = {}
             loaded_sound = data.get("sound_enabled")
             loaded_shadow = data.get("shadow_enabled")
+            loaded_line_blink = data.get("line_blink_enabled")
 
             if isinstance(loaded_sound, bool):
                 final_config["sound_enabled"] = loaded_sound
@@ -811,6 +819,14 @@ def load_config():
             else:
                 final_config["shadow_enabled"] = default_config["shadow_enabled"]
                 if DEBUG_MODE: print(f"Warning: 'shadow_enabled' missing/invalid in {filename}. Using default.")
+
+            if isinstance(loaded_line_blink, bool):
+                final_config["line_blink_enabled"] = loaded_line_blink
+            else:
+                final_config["line_blink_enabled"] = default_config["line_blink_enabled"]
+                if DEBUG_MODE: # DEBUG_MODE check for the print statement
+                    # This specific print might only be useful if data *was* a dict but key was bad/missing.
+                    print(f"Warning: 'line_blink_enabled' missing/invalid in {filename} (or file was not a dict). Using default.")
 
             if DEBUG_MODE: print(f"Config processed from {filename}. Final values: {final_config}")
             return final_config
@@ -878,7 +894,7 @@ def _save_best_score(username, score, time_str):
     except Exception as e:
         print(f"Error saving best score to {filename}: {e}")
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag): # Added shadow_enabled_flag
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag
     action_request = None
     # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
 
@@ -953,13 +969,17 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_s:
                     sound_enabled_flag = not sound_enabled_flag
-                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag})
-                    if DEBUG_MODE: print(f"Sound setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}")
+                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
+                    if DEBUG_MODE: print(f"Sound setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
                     # Potentially play a sound here to indicate change, if sound is now ON
                 elif event.key == pygame.K_d: # Toggle shadow
                     shadow_enabled_flag = not shadow_enabled_flag
-                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag})
-                    if DEBUG_MODE: print(f"Shadow setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}")
+                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
+                    if DEBUG_MODE: print(f"Shadow setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
+                elif event.key == pygame.K_b: # Toggle line blink
+                    line_blink_enabled_flag = not line_blink_enabled_flag
+                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
+                    if DEBUG_MODE: print(f"Line blink setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
@@ -1141,12 +1161,13 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "help_screen_active": help_screen_active_flag,
         "config_menu_active": config_menu_active_flag,
         "sound_enabled": sound_enabled_flag,
-        "shadow_enabled": shadow_enabled_flag, # Added
+        "shadow_enabled": shadow_enabled_flag,
+        "line_blink_enabled": line_blink_enabled_flag, # Added
         "current_username_input": current_username_str,
         "game_phase_str": game_phase_str
     }
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag): # Added line_blink_enabled_flag
     # --- Game Logic (AI, Piece Movement, Physics) ---
 
     if game_phase_str == "LINE_ANIMATION":
@@ -1217,7 +1238,10 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
                 if cleared_row_indices:
                     game_phase_str = "LINE_ANIMATION"
                     lines_being_animated_list = cleared_row_indices
-                    line_animation_timer_val = LINE_ANIMATION_DURATION
+                    if line_blink_enabled_flag:
+                        line_animation_timer_val = LINE_ANIMATION_DURATION
+                    else:
+                        line_animation_timer_val = 1
                     if len(cleared_row_indices) == 4: play_sound("tetris_clear")
                     elif len(cleared_row_indices) > 0: play_sound("line_clear")
                     current_piece_obj = None # Piece locked, wait for animation
@@ -1247,7 +1271,10 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
                     if cleared_row_indices:
                         game_phase_str = "LINE_ANIMATION"
                         lines_being_animated_list = cleared_row_indices
-                        line_animation_timer_val = LINE_ANIMATION_DURATION
+                        if line_blink_enabled_flag:
+                            line_animation_timer_val = LINE_ANIMATION_DURATION
+                        else:
+                            line_animation_timer_val = 1
                         if len(cleared_row_indices) == 4: play_sound("tetris_clear")
                         elif len(cleared_row_indices) > 0: play_sound("line_clear")
                         current_piece_obj = None # Piece locked, wait for animation
@@ -1396,12 +1423,13 @@ def _draw_help_screen(screen_surface, help_text_surfaces_list):
         screen_surface.blit(surface, (text_x, current_y))
         current_y += surface.get_height() + line_padding
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag): # Added shadow_enabled_flag
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, best_score_data_dict, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
     draw_grid_lines(screen_surface)
-    draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val) # Pass animation states
+    # Pass line_blink_enabled_flag to draw_blocks
+    draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag)
 
     # Draw shadow piece before the actual piece
     if shadow_enabled_flag:
@@ -1511,9 +1539,16 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         shadow_option_rect = shadow_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)) # Adjusted Y
         screen_surface.blit(shadow_option_surf, shadow_option_rect)
 
+        # Line Blink Option Text
+        line_blink_status_str = "ON" if line_blink_enabled_flag else "OFF"
+        line_blink_option_text_str = f"Line Blink: {line_blink_status_str} (Press B to toggle)"
+        line_blink_option_surf = INFO_FONT.render(line_blink_option_text_str, True, WHITE)
+        line_blink_option_rect = line_blink_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60)) # Adjusted Y
+        screen_surface.blit(line_blink_option_surf, line_blink_option_rect)
+
         # Close Menu Hint
         close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
-        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)) # Adjusted Y
+        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 140)) # Adjusted Y further down
         screen_surface.blit(close_hint_surf, close_hint_rect)
 
     pygame.display.flip()
@@ -1534,19 +1569,22 @@ def main():
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     global sound_enabled # Ensure main uses and can modify the global sound_enabled
     global shadow_enabled # Ensure main uses and can modify the global shadow_enabled
+    global line_blink_enabled # Add this
 
     # Load configuration
     loaded_config = load_config()
-    # load_config ensures that both keys are present and are booleans.
-    # Using .get() as an additional safety for direct access, though load_config should prevent KeyErrors.
+    # load_config ensures that all keys are present and are booleans.
+    # Using .get() as an additional safety for direct access.
     if isinstance(loaded_config, dict):
         sound_enabled = loaded_config.get("sound_enabled", True)
         shadow_enabled = loaded_config.get("shadow_enabled", True)
+        line_blink_enabled = loaded_config.get("line_blink_enabled", True) # Add this line
     else:
         # This case should be rare if load_config is robust as implemented
-        if DEBUG_MODE: print("Warning: load_config did not return a dictionary. Using default settings for sound and shadow.")
+        if DEBUG_MODE: print("Warning: load_config did not return a dictionary. Using all default settings.")
         sound_enabled = True
         shadow_enabled = True
+        line_blink_enabled = True # Add this line for the fallback
 
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
@@ -1606,7 +1644,7 @@ def main():
             current_piece, game_grid, running,
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
             joystick, joystick_enabled, help_screen_active,
-            game_phase, current_username_input, config_menu_active, sound_enabled, shadow_enabled # Pass current global states
+            game_phase, current_username_input, config_menu_active, sound_enabled, shadow_enabled, line_blink_enabled # Pass current global states
         )
 
         running = event_handling_result["running"]
@@ -1623,6 +1661,7 @@ def main():
         config_menu_active = event_handling_result["config_menu_active"] # Update local var from return
         sound_enabled = event_handling_result["sound_enabled"]           # Update global var from return
         shadow_enabled = event_handling_result["shadow_enabled"]         # Update global var from return
+        line_blink_enabled = event_handling_result["line_blink_enabled"] # Update global var from return
         current_username_input = event_handling_result["current_username_input"]
         # game_phase is now primarily managed by main based on action_request or game_over state changes
 
@@ -1661,7 +1700,8 @@ def main():
             soft_drop_active, game_over_sound_played, last_ai_move_time,
             game_start_time, final_game_time_str, total_paused_duration, time_at_pause,
             help_screen_active, game_phase,
-            lines_being_animated, line_animation_timer # Pass new animation states
+            lines_being_animated, line_animation_timer, # Existing animation params
+            line_blink_enabled  # Add the new flag here
         )
 
         game_over = game_logic_result["game_over"]
@@ -1709,7 +1749,8 @@ def main():
             help_screen_active, help_text_surfaces,
             game_phase, current_username_input, best_score_data,
             lines_being_animated, line_animation_timer,
-            config_menu_active, sound_enabled, shadow_enabled # Pass all flags
+            config_menu_active, sound_enabled, shadow_enabled,
+            line_blink_enabled  # Add this line
         )
     pygame.mixer.quit()
     pygame.font.quit()
