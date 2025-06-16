@@ -1404,24 +1404,27 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
     draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val) # Pass animation states
 
     # Draw shadow piece before the actual piece
-    if shadow_enabled_flag: # New condition for drawing shadow
-        if not game_over_flag and current_piece_obj and game_phase_str == "PLAYING": # Keep existing conditions too
+    if shadow_enabled_flag:
+        # Only attempt to calculate and draw shadow if piece exists and game is in correct state
+        if not game_over_flag and current_piece_obj and game_phase_str == "PLAYING":
+            # current_piece_obj is confirmed to be not None here.
             shadow_y = get_shadow_position_y(current_piece_obj, game_grid_data)
-            shadow_color = GREY # Or a more transparent color later
+            shadow_color = GREY
 
-        # Check if current_piece_obj is still valid (it should be if we are in "PLAYING" phase)
-        # and also ensure its shape and rotation are valid, though get_shadow_position_y implies validity.
-        if current_piece_obj.shape and current_piece_obj.rotation < len(current_piece_obj.shape):
-            for r_offset, c_offset in current_piece_obj.shape[current_piece_obj.rotation]:
-                block_r = shadow_y + r_offset
-                block_c = current_piece_obj.x + c_offset
-                # Ensure block is within grid boundaries before drawing shadow
-                if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
-                    # Check if the cell for the shadow is empty (optional, but good for visual clarity)
-                    # This prevents drawing shadow over existing landed blocks if logic is imperfect.
-                    # However, get_shadow_position_y should give a position where it *can* land.
-                    # For simplicity, we'll draw it directly.
-                     pygame.draw.rect(screen_surface, shadow_color, (GRID_OFFSET_X + block_c * BLOCK_SIZE, GRID_OFFSET_Y + block_r * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
+            # Now, proceed to get its shape and draw, as current_piece_obj is valid.
+            # The check for .shape and .rotation is for data integrity of a valid piece.
+            if current_piece_obj.shape and current_piece_obj.rotation < len(current_piece_obj.shape):
+                for r_offset, c_offset in current_piece_obj.shape[current_piece_obj.rotation]:
+                    block_r = shadow_y + r_offset
+                    block_c = current_piece_obj.x + c_offset
+                    if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
+                        pygame.draw.rect(screen_surface, shadow_color, (
+                            GRID_OFFSET_X + block_c * BLOCK_SIZE,
+                            GRID_OFFSET_Y + block_r * BLOCK_SIZE,
+                            BLOCK_SIZE - 1, BLOCK_SIZE - 1))
+            # Optional: else block for debugging if a non-None piece has bad shape/rotation data
+            # else:
+            #    if DEBUG_MODE: print(f"DEBUG: Shadow draw for valid piece {current_piece_obj} skipped due to invalid shape/rotation.")
 
     if not game_over_flag and current_piece_obj and game_phase_str != "GETTING_USERNAME" and game_phase_str != "LINE_ANIMATION": # Don't draw falling piece during name input or line animation
          draw_current_piece_on_grid(screen_surface, current_piece_obj)
