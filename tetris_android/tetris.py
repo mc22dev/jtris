@@ -629,110 +629,7 @@ def _unpack_game_state(game_state_dict):
             time_at_pause, total_paused_duration)
 
 # Local load_config removed, config_manager.load_config will be used.
-
-def save_config(config_data):
-    filename = "config.json"
-    try:
-        with open(filename, 'w') as f:
-            json.dump(config_data, f, indent=4) # Save with indentation for readability
-        if DEBUG_MODE: print(f"Config saved to {filename}: {config_data}")
-    except IOError as e:
-        if DEBUG_MODE: print(f"Error saving config to {filename}: {e}")
-    except Exception as e: # Catch any other unexpected errors during save
-        if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filename}: {e}")
-
-def _update_and_save_top_scores(new_score_entry):
-    filename = "best_score.json"
-
-    # 1. Load existing scores
-    current_top_scores = []
-    try:
-        with open(filename, 'r') as f:
-            loaded_data = json.load(f)
-            if isinstance(loaded_data, list):
-                # Basic validation for entries when loading for update
-                for entry in loaded_data:
-                    if isinstance(entry, dict) and \
-                       "username" in entry and isinstance(entry["username"], str) and \
-                       "score" in entry and isinstance(entry["score"], int) and \
-                       "time_str" in entry and isinstance(entry["time_str"], str):
-                        current_top_scores.append(entry)
-                    # Silently skip invalid entries when loading for update, or log if DEBUG_MODE
-                    elif DEBUG_MODE:
-                        print(f"Skipping invalid entry during load for update: {entry}")
-    except FileNotFoundError:
-        # It's okay if the file doesn't exist, means current_top_scores is empty.
-        if DEBUG_MODE: print(f"Info: {filename} not found while trying to update scores. Starting fresh list.")
-        pass # current_top_scores remains []
-    except json.JSONDecodeError:
-        if DEBUG_MODE: print(f"Warning: Error decoding {filename} during update. Score list might be reset/corrupted if saved now.")
-        # Decide if we should proceed with an empty list or abort. For now, proceed with empty.
-        current_top_scores = []
-    except Exception as e:
-        if DEBUG_MODE: print(f"Warning: Unexpected error loading {filename} for update: {e}. Proceeding with empty list.")
-        current_top_scores = []
-
-    # 2. Add the new score entry
-    current_top_scores.append(new_score_entry)
-
-    # 3. Sort the list by score (descending)
-    #    Use .get("score", 0) for robustness in sorting, though entries added should be valid.
-    current_top_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
-
-    # 4. Truncate the list to the top 10 scores
-    updated_top_10_scores = current_top_scores[:10]
-
-    # 5. Write the updated list back to best_score.json
-    try:
-        with open(filename, 'w') as f:
-            json.dump(updated_top_10_scores, f, indent=4)
-        if DEBUG_MODE: print(f"Top scores saved to {filename}: {updated_top_10_scores}")
-    except IOError as e:
-        if DEBUG_MODE: print(f"Error saving top scores to {filename}: {e}")
-    except Exception as e:
-        if DEBUG_MODE: print(f"An unexpected error occurred while saving top scores to {filename}: {e}")
-
-def _load_best_score():
-    filename = "best_score.json"
-    # Default return is now an empty list if file is problematic
-    default_scores_list = []
-
-    try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-
-            # Validate that data is a list
-            if not isinstance(data, list):
-                if DEBUG_MODE: print(f"Warning: {filename} content is not a list. Returning empty list.")
-                return default_scores_list
-
-            valid_scores = []
-            for entry in data:
-                # Validate each entry in the list
-                if isinstance(entry, dict) and \
-                   "username" in entry and isinstance(entry["username"], str) and \
-                   "score" in entry and isinstance(entry["score"], int) and \
-                   "time_str" in entry and isinstance(entry["time_str"], str):
-                    valid_scores.append(entry)
-                else:
-                    if DEBUG_MODE: print(f"Warning: Invalid score entry found in {filename}: {entry}. Skipping.")
-
-            # Sort by score descending and truncate to top 10
-            valid_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
-            top_10_scores = valid_scores[:10]
-
-            if DEBUG_MODE: print(f"Top scores loaded from {filename}: {top_10_scores}")
-            return top_10_scores
-
-    except FileNotFoundError:
-        if DEBUG_MODE: print(f"Info: {filename} not found. Returning empty list.")
-        return default_scores_list # Return copy if mutable, but [] is fine
-    except json.JSONDecodeError:
-        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Returning empty list.")
-        return default_scores_list
-    except Exception as e:
-        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Returning empty list.")
-        return default_scores_list
+# Local save_config, _update_and_save_top_scores, _load_best_score removed. config_manager versions will be used.
 
 # This function was replaced by _update_and_save_top_scores
 # def _save_best_score(username, score, time_str):
@@ -825,39 +722,39 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_s: # Sound Effects Toggle
                     sound_effects_enabled_flag = not sound_effects_enabled_flag
-                    save_config({
+                    config_manager.save_config({
                         "sound_effects_enabled": sound_effects_enabled_flag,
                         "shadow_enabled": shadow_enabled_flag,
                         "line_blink_enabled": line_blink_enabled_flag,
                         "music_enabled": music_enabled_flag
-                    })
+                    }, DEBUG_MODE)
                     if DEBUG_MODE: print(f"Sound Effects setting toggled. New state: {sound_effects_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_m: # Music Toggle
                     music_enabled_flag = not music_enabled_flag
-                    save_config({
+                    config_manager.save_config({
                         "sound_effects_enabled": sound_effects_enabled_flag,
                         "shadow_enabled": shadow_enabled_flag,
                         "line_blink_enabled": line_blink_enabled_flag,
                         "music_enabled": music_enabled_flag
-                    })
+                    }, DEBUG_MODE)
                     if DEBUG_MODE: print(f"Music setting toggled. New state: {music_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_d: # Shadow Toggle
                     shadow_enabled_flag = not shadow_enabled_flag
-                    save_config({
+                    config_manager.save_config({
                         "sound_effects_enabled": sound_effects_enabled_flag,
                         "shadow_enabled": shadow_enabled_flag,
                         "line_blink_enabled": line_blink_enabled_flag,
                         "music_enabled": music_enabled_flag
-                    })
+                    }, DEBUG_MODE)
                     if DEBUG_MODE: print(f"Shadow setting toggled. New state: {shadow_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_b: # Line Blink Toggle
                     line_blink_enabled_flag = not line_blink_enabled_flag
-                    save_config({
+                    config_manager.save_config({
                         "sound_effects_enabled": sound_effects_enabled_flag,
                         "shadow_enabled": shadow_enabled_flag,
                         "line_blink_enabled": line_blink_enabled_flag,
                         "music_enabled": music_enabled_flag
-                    })
+                    }, DEBUG_MODE)
                     if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
@@ -1503,7 +1400,7 @@ def main():
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
     # Pre-render help text surfaces (using appropriate fonts)
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
-    top_scores_list = _load_best_score() # Renamed variable
+    top_scores_list = config_manager._load_best_score(DEBUG_MODE) # Call via config_manager
 
     # --- Background Music Loading ---
     background_music_file = "background_01.mp3"
@@ -1645,8 +1542,8 @@ def main():
                 "score": score,
                 "time_str": final_game_time_str if final_game_time_str else formatted_time
             }
-            _update_and_save_top_scores(new_entry)
-            top_scores_list = _load_best_score() # Reload to get the updated list for display
+            config_manager._update_and_save_top_scores(new_entry, DEBUG_MODE)
+            top_scores_list = config_manager._load_best_score(DEBUG_MODE) # Reload to get the updated list for display
             game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
             current_username_input = ""
             if DEBUG_MODE: print(f"DEBUG MainLoop: Score saved. game_phase set to '{game_phase}'.")
