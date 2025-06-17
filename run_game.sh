@@ -8,4 +8,4 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 cd "$SCRIPT_DIR"
 
 echo "Running Tetris from $SCRIPT_DIR using module execution..."
-python3 -m tetris_android.main "$@"
+python3 -m tetris_android.tetris "$@"
