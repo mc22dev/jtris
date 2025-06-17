@@ -22,13 +22,29 @@ pip install pygame
 (Or using the requirements.txt: `pip install -r requirements.txt`)
 
 ## How to Run (Desktop)
-1. Ensure you have Python and Pygame installed.
-2. The main game script is `tetris_android/main.py` (which runs `tetris_android/tetris.py`).
-3. Create a directory named `tetris_android/sounds/` if you want to use sound effects (sound files not provided). Ensure `DejaVuSans.ttf` (a real font file, not the placeholder) is in `tetris_android/`.
-4. Run the game from the project root using:
+
+After the recent refactoring, the game uses relative imports and must be run as a Python module.
+
+1.  Ensure you have Python 3.x and Pygame installed.
+2.  The main game script is `tetris_android/main.py`.
+3.  (Optional) Create `tetris_android/sounds/` for sound effects and ensure `tetris_android/DejaVuSans.ttf` is a valid font file.
+
+**Recommended way to run:**
+Use the provided helper script from the project root:
 ```bash
-python tetris_android/main.py
+./run_game.sh
 ```
+This script handles running the game as a module correctly.
+
+**Alternative way (running as a module directly):**
+From the project root directory, execute:
+```bash
+python3 -m tetris_android.main
+```
+(Or `python -m tetris_android.main` if `python` defaults to Python 3 on your system).
+
+**Why the change?**
+The codebase was refactored into multiple Python modules (e.g., `game_state.py`, `ui_manager.py`). These modules use relative imports (like `from .constants import ...`) to refer to each other. Running `python tetris_android/main.py` directly makes Python treat `main.py` as a top-level script, which causes these relative imports to fail with an `ImportError`. Running the game as a module (`-m`) allows Python to correctly recognize the `tetris_android` directory as a package and resolve the relative imports.
 
 ## Controls (Desktop)
 - **Left Arrow**: Move piece left
