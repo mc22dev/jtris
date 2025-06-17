@@ -3,8 +3,10 @@
 import json
 import os
 
+CONFIG_SUBDIR = "config"
+
 def load_config(DEBUG_MODE):
-    filename = "config.json"
+    filename = os.path.join(CONFIG_SUBDIR, "config.json")
     default_config = {
         "sound_effects_enabled": True,
         "shadow_enabled": True,
@@ -72,23 +74,24 @@ def load_config(DEBUG_MODE):
         return default_config.copy()
 
 def save_config(config_data, DEBUG_MODE):
-    filename = "config.json"
+    filepath = os.path.join(CONFIG_SUBDIR, "config.json")
     try:
-        with open(filename, 'w') as f:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w') as f:
             json.dump(config_data, f, indent=4) # Save with indentation for readability
-        if DEBUG_MODE: print(f"Config saved to {filename}: {config_data}")
+        if DEBUG_MODE: print(f"Config saved to {filepath}: {config_data}")
     except IOError as e:
-        if DEBUG_MODE: print(f"Error saving config to {filename}: {e}")
+        if DEBUG_MODE: print(f"Error saving config to {filepath}: {e}")
     except Exception as e: # Catch any other unexpected errors during save
-        if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filename}: {e}")
+        if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filepath}: {e}")
 
 def _update_and_save_top_scores(new_score_entry, DEBUG_MODE):
-    filename = "best_score.json"
+    filepath = os.path.join(CONFIG_SUBDIR, "best_score.json")
 
     # 1. Load existing scores
     current_top_scores = []
     try:
-        with open(filename, 'r') as f:
+        with open(filepath, 'r') as f: # Changed filename to filepath
             loaded_data = json.load(f)
             if isinstance(loaded_data, list):
                 # Basic validation for entries when loading for update
@@ -103,21 +106,19 @@ def _update_and_save_top_scores(new_score_entry, DEBUG_MODE):
                         print(f"Skipping invalid entry during load for update: {entry}")
     except FileNotFoundError:
         # It's okay if the file doesn't exist, means current_top_scores is empty.
-        if DEBUG_MODE: print(f"Info: {filename} not found while trying to update scores. Starting fresh list.")
+        if DEBUG_MODE: print(f"Info: {filepath} not found while trying to update scores. Starting fresh list.")
         pass # current_top_scores remains []
     except json.JSONDecodeError:
-        if DEBUG_MODE: print(f"Warning: Error decoding {filename} during update. Score list might be reset/corrupted if saved now.")
-        # Decide if we should proceed with an empty list or abort. For now, proceed with empty.
+        if DEBUG_MODE: print(f"Warning: Error decoding {filepath} during update. Score list might be reset/corrupted if saved now.")
         current_top_scores = []
     except Exception as e:
-        if DEBUG_MODE: print(f"Warning: Unexpected error loading {filename} for update: {e}. Proceeding with empty list.")
+        if DEBUG_MODE: print(f"Warning: Unexpected error loading {filepath} for update: {e}. Proceeding with empty list.")
         current_top_scores = []
 
     # 2. Add the new score entry
     current_top_scores.append(new_score_entry)
 
     # 3. Sort the list by score (descending)
-    #    Use .get("score", 0) for robustness in sorting, though entries added should be valid.
     current_top_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
 
     # 4. Truncate the list to the top 10 scores
@@ -125,31 +126,29 @@ def _update_and_save_top_scores(new_score_entry, DEBUG_MODE):
 
     # 5. Write the updated list back to best_score.json
     try:
-        with open(filename, 'w') as f:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'w') as f: # Changed filename to filepath
             json.dump(updated_top_10_scores, f, indent=4)
-        if DEBUG_MODE: print(f"Top scores saved to {filename}: {updated_top_10_scores}")
+        if DEBUG_MODE: print(f"Top scores saved to {filepath}: {updated_top_10_scores}")
     except IOError as e:
-        if DEBUG_MODE: print(f"Error saving top scores to {filename}: {e}")
+        if DEBUG_MODE: print(f"Error saving top scores to {filepath}: {e}")
     except Exception as e:
-        if DEBUG_MODE: print(f"An unexpected error occurred while saving top scores to {filename}: {e}")
+        if DEBUG_MODE: print(f"An unexpected error occurred while saving top scores to {filepath}: {e}")
 
 def _load_best_score(DEBUG_MODE):
-    filename = "best_score.json"
-    # Default return is now an empty list if file is problematic
+    filename = os.path.join(CONFIG_SUBDIR, "best_score.json")
     default_scores_list = []
 
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
 
-            # Validate that data is a list
             if not isinstance(data, list):
                 if DEBUG_MODE: print(f"Warning: {filename} content is not a list. Returning empty list.")
                 return default_scores_list
 
             valid_scores = []
             for entry in data:
-                # Validate each entry in the list
                 if isinstance(entry, dict) and \
                    "username" in entry and isinstance(entry["username"], str) and \
                    "score" in entry and isinstance(entry["score"], int) and \
@@ -158,7 +157,6 @@ def _load_best_score(DEBUG_MODE):
                 else:
                     if DEBUG_MODE: print(f"Warning: Invalid score entry found in {filename}: {entry}. Skipping.")
 
-            # Sort by score descending and truncate to top 10
             valid_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
             top_10_scores = valid_scores[:10]
 
@@ -167,7 +165,7 @@ def _load_best_score(DEBUG_MODE):
 
     except FileNotFoundError:
         if DEBUG_MODE: print(f"Info: {filename} not found. Returning empty list.")
-        return default_scores_list # Return copy if mutable, but [] is fine
+        return default_scores_list
     except json.JSONDecodeError:
         if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Returning empty list.")
         return default_scores_list
