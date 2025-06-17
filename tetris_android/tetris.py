@@ -5,6 +5,22 @@ import os
 import copy
 import json
 import argparse
+from .constants import (
+    BLACK, WHITE, CYAN, YELLOW, MAGENTA, GREEN, RED, BLUE, ORANGE, GREY, GARBAGE_COLOR,
+    PIECE_COLORS, SHAPES,
+    SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE,
+    GRID_WIDTH, GRID_HEIGHT, BLOCK_SIZE, NEXT_PIECE_BLOCK_SIZE,
+    GRID_OFFSET_X, GRID_OFFSET_Y,
+    UI_INFO_X_OFFSET, UI_INFO_START_Y, UI_INFO_LINE_SPACING, NEXT_PIECE_BOX_SIZE,
+    SCORE_FONT_SIZE, INFO_FONT_SIZE, TITLE_FONT_SIZE, GAME_OVER_FONT_SIZE,
+    INITIAL_FALL_SPEED, FALL_SPEED_DECREMENT_PER_LEVEL, MIN_FALL_SPEED,
+    LINES_PER_LEVEL, GARBAGE_START_LEVEL, MAX_GARBAGE_ROWS,
+    AI_PLAYER_TOGGLE_KEY, RESTART_KEY, PAUSE_KEY, AI_MOVE_DELAY, LINE_ANIMATION_DURATION,
+    PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT, PROGRESS_BAR_BACKGROUND_COLOR,
+    PROGRESS_BAR_FILL_COLOR, PROGRESS_BAR_BORDER_COLOR
+)
+from .piece import Piece # Import Piece from its new location
+from . import ai_player # Import the new AI player module
 
 # Initialize Pygame
 pygame.init()
@@ -14,86 +30,11 @@ pygame.joystick.init()
 
 DEBUG_MODE = False
 
-# Screen dimensions
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
-SCREEN_TITLE = "Tetris"
-
-# Colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-# ... other colors ...
-CYAN = (0, 255, 255)
-YELLOW = (255, 255, 0)
-MAGENTA = (255, 0, 255)
-GREEN = (0, 255, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-ORANGE = (255, 165, 0)
-GREY = (128, 128, 128)
-GARBAGE_COLOR = (100, 100, 100)
-
-
-PIECE_COLORS = [CYAN, YELLOW, MAGENTA, GREEN, RED, BLUE, ORANGE]
-SHAPES = [
-    [[(1, -2), (1, -1), (1, 0), (1, 1)], [(-1, 0), (0, 0), (1, 0), (2, 0)]], # I
-    [[(0, 0), (0, 1), (1, 0), (1, 1)]], # O
-    [ # T
-        [(-1, 0), (0, 0), (1, 0), (0, -1)], [ (0, 1), (0, 0), (0, -1), (1, 0)],
-        [(-1, 0), (0, 0), (1, 0), (0, 1)], [(-1, 0), (0, 1), (0, 0), (0, -1)]
-    ],
-    [[(0, 0), (0, 1), (1, -1), (1, 0)], [(-1, 0), (0, 0), (0, 1), (1, 1)]], # S
-    [[(0, -1), (0, 0), (1, 0), (1, 1)], [(-1, 1), (0, 1), (0, 0), (1, 0)]], # Z
-    [ # J
-        [(-1, -1), (0, -1), (0, 0), (0, 1)], [(-1, 1), (-1, 0), (0, 0), (1, 0)],
-        [(1, 1), (0, 1), (0, 0), (0, -1)], [(1, -1), (1, 0), (0, 0), (-1, 0)]
-    ],
-    [ # L
-        [(-1, 1), (0, 1), (0, 0), (0, -1)], [(-1, -1), (-1, 0), (0, 0), (1, 0)],
-        [(1, -1), (0, -1), (0, 0), (0, 1)], [(1, 1), (1, 0), (0, 0), (-1, 0)]
-    ]
-]
-
-# Grid dimensions
-GRID_WIDTH = 10
-GRID_HEIGHT = 20
-BLOCK_SIZE = 30 # Main game block size
-NEXT_PIECE_BLOCK_SIZE = 20 # Smaller blocks for next piece display
-
-GRID_OFFSET_X = (SCREEN_WIDTH - GRID_WIDTH * BLOCK_SIZE) // 2
-GRID_OFFSET_Y = (SCREEN_HEIGHT - GRID_HEIGHT * BLOCK_SIZE) // 2
-
-# UI variables
-UI_INFO_X_OFFSET = 20 # From right edge of grid
-UI_INFO_START_Y = GRID_OFFSET_Y + 20
-UI_INFO_LINE_SPACING = 10
-NEXT_PIECE_BOX_SIZE = 5 * NEXT_PIECE_BLOCK_SIZE # Accommodate 4x4 piece + padding
-
-# Game variables
-# ... (level, difficulty, etc. remain same)
-INITIAL_FALL_SPEED = 0.8; FALL_SPEED_DECREMENT_PER_LEVEL = 0.03; MIN_FALL_SPEED = 0.05
-LINES_PER_LEVEL = 10; GARBAGE_START_LEVEL = 3; MAX_GARBAGE_ROWS = 5
-
-SCORE_FONT_SIZE = 36
-INFO_FONT_SIZE = 30
-TITLE_FONT_SIZE = 24
-GAME_OVER_FONT_SIZE = 72
-AI_PLAYER_TOGGLE_KEY = pygame.K_a # Key to toggle AI player mode
-RESTART_KEY = pygame.K_r # Key to restart the game after game over
-PAUSE_KEY = pygame.K_p # Key to pause/unpause the game
-AI_MOVE_DELAY = 0.05 # Time in seconds between AI moves, adjust for speed
-LINE_ANIMATION_DURATION = 30  # Frames, approx 0.5s at 60fps
-
-# Progress Bar UI Constants
-PROGRESS_BAR_WIDTH = 150 # Width of the level progress bar in pixels
-PROGRESS_BAR_HEIGHT = 20 # Height of the level progress bar in pixels
-PROGRESS_BAR_BACKGROUND_COLOR = (50, 50, 50) # Dark Grey
-PROGRESS_BAR_FILL_COLOR = GREEN # Using existing GREEN = (0, 255, 0)
-PROGRESS_BAR_BORDER_COLOR = GREY  # Using existing GREY = (128, 128, 128)
+# SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT are initialized in main()
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
 SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
-SOUND_DIR = "sounds"
+SOUND_DIR = "sounds" # Specific to asset loading in tetris.py
 sound_effects_enabled = True # Renamed from sound_enabled
 shadow_enabled = True
 line_blink_enabled = True
@@ -110,39 +51,6 @@ def play_sound(sound_name):
     if not sound_effects_enabled:
         return
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
-
-class Piece:
-    def __init__(self, x, y, shape_type=None): # Allow forcing shape_type for next_piece
-        if shape_type is None:
-            self.shape_type = random.randint(0, len(SHAPES) - 1)
-        else:
-            self.shape_type = shape_type
-        self.shape = SHAPES[self.shape_type]
-        self.color = PIECE_COLORS[self.shape_type]
-        self.rotation = 0
-        self.x = x # Grid column for current piece, or abstract for next piece
-        self.y = y # Grid row for current piece
-        self.is_hard_dropping_animated = False # True if piece is currently in animated hard drop
-        self.target_y_for_animated_drop = -1   # Stores the target Y row for the animated hard drop
-
-    def current_shape_coords(self):
-        coords = []
-        for r_offset, c_offset in self.shape[self.rotation]:
-            coords.append((self.y + r_offset, self.x + c_offset))
-        return coords
-
-    def get_shape_for_preview(self): # Get block coords relative to a 0,0 pivot for preview
-        # Returns the coordinates of the first rotation for preview.
-        return self.shape[0]
-
-
-    def rotate(self, grid_data): # Only for main game piece
-        original_rotation = self.rotation
-        self.rotation = (self.rotation + 1) % len(self.shape)
-        if not is_valid_position(self, grid_data):
-            self.rotation = original_rotation
-        else:
-            play_sound("rotate")
 
 # ... (create_grid, draw_grid_lines, draw_blocks, draw_piece - largely same)
 def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
@@ -230,7 +138,7 @@ def get_full_lines(grid_data):
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
 def spawn_piece_at_start(): # Renamed for clarity
-    return Piece(GRID_WIDTH // 2, 0)
+    return Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
 def add_garbage_blocks(grid_data, level):
@@ -252,7 +160,7 @@ def add_garbage_blocks(grid_data, level):
         garbage_row = [GARBAGE_COLOR for _ in range(GRID_WIDTH)]; hole_position = random.randint(0, GRID_WIDTH - 1)
         garbage_row[hole_position] = 0; grid_data[row_index] = garbage_row
 
-    temp_piece_for_check = Piece(GRID_WIDTH // 2, 0)
+    temp_piece_for_check = Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
     return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
 # --- Time Formatting Function ---
@@ -402,257 +310,179 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
     text_y = bar_outer_rect.y - text_surface.get_height() - 2 # 2px padding above bar
     screen.blit(text_surface, (text_x, text_y))
 
-
-# --- AI Helper Functions ---
-
-def clone_grid(grid_data):
-    """Creates and returns a deep copy of the given game grid."""
-    return [row[:] for row in grid_data]
-
-def _get_cleared_lines_and_new_grid(grid_copy_to_check):
-    """
-    Checks for completed lines on a given grid copy and returns the number of lines
-    cleared AND the grid state after clearing those lines.
-    Args:
-        grid_copy_to_check (list): The grid (a list of lists) to check.
-    Returns:
-        tuple: (lines_cleared_count, grid_after_clearing)
-    """
-    lines_cleared_count = 0
-    grid_after_clearing = [row[:] for row in grid_copy_to_check]
-
-    r = GRID_HEIGHT - 1
-    while r >= 0:
-        is_line_full = True
-        for c in range(GRID_WIDTH):
-            if grid_after_clearing[r][c] == 0:
-                is_line_full = False
-                break
-        if is_line_full:
-            lines_cleared_count += 1
-            del grid_after_clearing[r]
-            grid_after_clearing.insert(0, [0 for _ in range(GRID_WIDTH)])
-        else:
-            r -= 1
-
-    return lines_cleared_count, grid_after_clearing
-
-def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation):
-    """
-    Simulates placing a piece at a given x and rotation on a (deep)copy of the grid.
-    Performs a hard drop and calculates the outcome.
-
-    Args:
-        grid_to_simulate_on (list): The grid state (must be a deep copy) to simulate on.
-        piece_to_simulate (Piece): The piece object whose shape and color are used.
-                                   This function creates its own temporary copy for simulation.
-        target_x (int): The target column (piece_s x-coordinate) for placement.
-        target_rotation (int): The target rotation index for the piece.
-
-    Returns:
-        tuple: (resulting_grid_after_clear, lines_cleared, landing_y, is_move_possible)
-               - resulting_grid_after_clear (list or None): Grid state after piece placement AND line clearing. None if placement impossible.
-               - lines_cleared (int): Number of lines cleared by this move.
-               - landing_y (int): The y-coordinate (pivot) where the piece landed. -1 if not possible.
-               - is_move_possible (bool): False if the piece cannot be placed at the given x/rotation (e.g., spawn obstructed).
-    """
-    sim_grid_current_move = clone_grid(grid_to_simulate_on)
-
-    temp_piece = Piece(target_x, 0, piece_to_simulate.shape_type)
-    temp_piece.rotation = target_rotation
-    temp_piece.x = target_x
-
-    min_r_offset = 0
-    current_shape_blocks = temp_piece.shape[temp_piece.rotation]
-    if current_shape_blocks:
-        min_r_offset = min(r for r, c in current_shape_blocks)
-    temp_piece.y = -min_r_offset # Adjust spawn y to be at the very top
-
-    if not is_valid_position(temp_piece, sim_grid_current_move):
-        return None, 0, -1, False
-
-    landing_y = temp_piece.y
-    while True:
-        temp_piece.y += 1
-        if not is_valid_position(temp_piece, sim_grid_current_move):
-            temp_piece.y -= 1
-            landing_y = temp_piece.y
-            break
-
-    for r_offset, c_offset in current_shape_blocks:
-        block_r, block_c = landing_y + r_offset, temp_piece.x + c_offset
-        if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
-            sim_grid_current_move[block_r][block_c] = temp_piece.color
-
-    lines_cleared, grid_after_clear = _get_cleared_lines_and_new_grid(sim_grid_current_move)
-
-    return grid_after_clear, lines_cleared, landing_y, True
-
-
-# --- Heuristic Evaluation Function ---
-
-HEURISTIC_WEIGHTS = {
-    'aggregate_height': -0.510066,
-    'cleared_lines': 0.760666,
-    'holes': -0.35663,
-    'bumpiness': -0.184483,
-    # Additional potential heuristics (can be added and weighted)
-    # 'wells': -0.2, # Sum of depths of wells
-    # 'blockades': -0.3, # Number of empty cells covered by a block
-    # 'edge_blocks': 0.1 # Number of blocks touching the side walls (can be good or bad)
-}
-
-def evaluate_board_state(grid, lines_cleared_by_move):
-    """
-    Evaluates the given board state based on several heuristics.
-    A higher score is better.
-
-    Args:
-        grid (list): The game grid (list of lists) to evaluate.
-        lines_cleared_by_move (int): Number of lines cleared by the move that led to this state.
-
-    Returns:
-        float: The heuristic score for the board state.
-    """
-    score = 0
-
-    # 1. Aggregate Height: Sum of the heights of all columns. Lower is better.
-    #    Height of a column is GRID_HEIGHT minus the row of the highest block in that column.
-    #    If column is empty, its height is 0.
-    aggregate_height = 0
-    column_heights = [0] * GRID_WIDTH
-    for c in range(GRID_WIDTH):
-        for r in range(GRID_HEIGHT):
-            if grid[r][c] != 0:
-                column_heights[c] = GRID_HEIGHT - r
-                break
-        aggregate_height += column_heights[c]
-    score += HEURISTIC_WEIGHTS['aggregate_height'] * aggregate_height
-
-    # 2. Cleared Lines: Number of lines cleared by the last move. More is better.
-    #    This is directly passed as an argument.
-    score += HEURISTIC_WEIGHTS['cleared_lines'] * lines_cleared_by_move
-
-    # 3. Holes: Number of empty cells that have at least one block above them in the same column. Lower is better.
-    holes = 0
-    for c in range(GRID_WIDTH):
-        block_above_found = False
-        for r in range(GRID_HEIGHT): # Iterate from top to bottom
-            if grid[r][c] != 0:
-                block_above_found = True
-            elif block_above_found and grid[r][c] == 0:
-                holes += 1
-    score += HEURISTIC_WEIGHTS['holes'] * holes
-
-    # 4. Bumpiness: Sum of the absolute differences in height between adjacent columns. Lower is better.
-    bumpiness = 0
-    for c in range(GRID_WIDTH - 1):
-        bumpiness += abs(column_heights[c] - column_heights[c+1])
-    score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
-
-    # --- (Optional: Add other heuristics here if defined in HEURISTIC_WEIGHTS) ---
-    # Example: Wells
-    # wells_score = 0
-    # if 'wells' in HEURISTIC_WEIGHTS:
-    #     for c in range(GRID_WIDTH):
-    #         for r in range(GRID_HEIGHT -1, -1, -1): # Iterate from bottom up
-    #             if grid[r][c] == 0: # Found an empty cell
-    #                 # Check left wall
-    #                 left_wall = (c == 0) or (grid[r][c-1] != 0)
-    #                 # Check right wall
-    #                 right_wall = (c == GRID_WIDTH - 1) or (grid[r][c+1] != 0)
-    #                 if left_wall and right_wall:
-    #                     # This is the top of a well, count depth
-    #                     depth = 0
-    #                     for wr in range(r, GRID_HEIGHT):
-    #                         if grid[wr][c] == 0:
-    #                             depth +=1
-    #                         else:
-    #                             break
-    #                     wells_score += depth # Simple sum of depths, could be sum of squares etc.
-    #                 break # Move to next column once top of well or block is found
-    #     score += HEURISTIC_WEIGHTS['wells'] * wells_score
-
-    return score
-
-
-# --- AI: Find Best Move Function ---
-
-def find_best_move(grid_data, current_piece_obj, next_piece_obj):
-    """
-    Finds the best move (column and rotation) for the current piece by simulating
-    all possible placements and evaluating the resulting board states.
-
-    Args:
-        grid_data (list): The current game grid.
-        current_piece_obj (Piece): The current falling piece.
-        next_piece_obj (Piece): The next piece (can be None or used for two-ply lookahead,
-                                 but current implementation is one-ply).
-
-    Returns:
-        tuple: (best_x, best_rotation, best_score)
-               - best_x (int): The target column for the best move.
-               - best_rotation (int): The target rotation for the best move.
-               - best_score (float): The score of the board state resulting from the best move.
-                                     Returns -float('inf') if no moves are possible.
-    """
-    best_score = -float('inf')
-    best_x = -1
-    best_rotation = -1
-    best_landing_y = -1 # Store the landing_y of the best move
-
-    # Iterate through all possible rotations for the current piece
-    for rotation_idx in range(len(current_piece_obj.shape)):
-        # Iterate through all possible column placements
-        # Piece x-coordinates are for the pivot. Need to determine valid range.
-        # A simple range is from where leftmost block is at col 0
-        # to where rightmost block is at col GRID_WIDTH - 1
-        # This can be refined, but for now, let's try a broad range of columns.
-        # Min/max c_offset for the current rotation will determine this.
-
-        # Create a temporary piece to check its bounds for each rotation
-        temp_eval_piece = Piece(0, 0, current_piece_obj.shape_type) # x,y are dummy here
-        temp_eval_piece.rotation = rotation_idx
-
-        current_shape_blocks = temp_eval_piece.shape[temp_eval_piece.rotation]
-        min_c_offset_for_shape = 0
-        max_c_offset_for_shape = 0
-        if current_shape_blocks:
-            min_c_offset_for_shape = min(c for r,c in current_shape_blocks)
-            max_c_offset_for_shape = max(c for r,c in current_shape_blocks)
-
-        # Iterate through all possible x positions for the piece's pivot
-        for x_col in range(-min_c_offset_for_shape, GRID_WIDTH - max_c_offset_for_shape):
-            # Simulate placing the piece at (x_col, rotation_idx)
-            # The y-coordinate for simulation starts near the top and hard-drops.
-            # simulate_place_piece handles the hard drop and landing.
-
-            grid_copy = clone_grid(grid_data) # Use a fresh copy for each simulation
-
-            # Pass the original current_piece_obj for its shape_type to simulate_place_piece
-            resulting_grid, lines_cleared, landing_y, is_possible = \
-                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx)
-
-            if is_possible:
-                current_move_score = evaluate_board_state(resulting_grid, lines_cleared)
-
-                # Basic tie-breaking: prefer lower landing height if scores are equal
-                if current_move_score > best_score:
-                    best_score = current_move_score
-                    best_x = x_col
-                    best_rotation = rotation_idx
-                    best_landing_y = landing_y
-                elif current_move_score == best_score:
-                    # Tie-breaking: prefer moves that result in a lower (higher y-value) piece position
-                    if landing_y > best_landing_y: # Higher y means lower on grid
-                        best_x = x_col
-                        best_rotation = rotation_idx
-                        best_landing_y = landing_y
-                        # best_score remains the same
-
-    return {'x': best_x, 'rotation': best_rotation, 'score': best_score, 'landing_y': best_landing_y}
-
 # --- Input Handling Sub-functions ---
+
+# Helper functions for _update_game_state
+def _process_ai_move(gs, play_sound_func, is_valid_position_func):
+    # AI Player Decision Logic
+    # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
+    # gs.soft_drop_active are modified here.
+    # Dependencies: ai_player.clone_grid, ai_player.find_best_move, DEBUG_MODE
+    if time.time() - gs.last_ai_move_time > AI_MOVE_DELAY:
+        grid_copy_for_ai = ai_player.clone_grid(gs.game_grid)
+        best_move_info = ai_player.find_best_move(
+            grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
+            is_valid_position_func=is_valid_position_func,
+            play_sound_func=play_sound_func
+        )
+
+        if best_move_info and best_move_info['x'] != -1:
+            gs.current_piece.rotation = best_move_info['rotation']
+            gs.current_piece.x = best_move_info['x']
+            gs.current_piece.target_y_for_animated_drop = best_move_info['landing_y']
+            gs.current_piece.is_hard_dropping_animated = True
+            gs.soft_drop_active = False
+        else:
+            if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
+            gs.game_over = True
+        gs.last_ai_move_time = time.time()
+
+def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+    # Animated Hard Drop Logic
+    # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
+    # gs.last_fall_time, gs.soft_drop_active, gs.game_over
+    # Returns: dict for game phase transition if line clear, else None
+    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
+    # LINE_ANIMATION_DURATION, GRID_WIDTH
+    gs.current_piece.y += 1
+    if gs.current_piece.y >= gs.current_piece.target_y_for_animated_drop:
+        gs.current_piece.y = gs.current_piece.target_y_for_animated_drop
+        gs.current_piece.is_hard_dropping_animated = False
+        add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+
+        cleared_row_indices = get_full_lines(gs.game_grid)
+        if cleared_row_indices:
+            if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
+            elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
+            gs.current_piece = None # Piece locked, wait for animation
+            return {
+                'game_phase_str': "LINE_ANIMATION",
+                'lines_being_animated': cleared_row_indices,
+                'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
+            }
+        else: # No lines cleared
+            gs.current_piece = gs.next_piece_1
+            if gs.current_piece:
+                gs.current_piece.x = GRID_WIDTH // 2
+                gs.current_piece.y = 0
+                gs.current_piece.is_valid_position = is_valid_position_func
+                gs.current_piece.play_sound = play_sound_func
+
+            gs.next_piece_1 = gs.next_piece_2
+            if gs.next_piece_1:
+                gs.next_piece_1.is_valid_position = is_valid_position_func
+                gs.next_piece_1.play_sound = play_sound_func
+
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+
+            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                gs.game_over = True
+                gs.current_piece = None
+        gs.last_fall_time = time.time()
+        gs.soft_drop_active = False
+    return None
+
+def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+    # Automatic Piece Descent
+    # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
+    # gs.last_fall_time, gs.soft_drop_active, gs.game_over
+    # Returns: dict for game phase transition if line clear, else None
+    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
+    # LINE_ANIMATION_DURATION, GRID_WIDTH
+    fall_interval = gs.current_fall_speed
+    if gs.soft_drop_active: fall_interval = min(gs.current_fall_speed, 0.05)
+
+    if time.time() - gs.last_fall_time > fall_interval:
+        gs.current_piece.y += 1
+        if not is_valid_position_func(gs.current_piece, gs.game_grid):
+            gs.current_piece.y -= 1
+            add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+
+            cleared_row_indices = get_full_lines(gs.game_grid)
+            if cleared_row_indices:
+                if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
+                elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
+                gs.current_piece = None # Piece locked, wait for animation
+                return {
+                    'game_phase_str': "LINE_ANIMATION",
+                    'lines_being_animated': cleared_row_indices,
+                    'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
+                }
+            else: # No lines cleared
+                gs.current_piece = gs.next_piece_1
+                if gs.current_piece:
+                    gs.current_piece.x = GRID_WIDTH // 2
+                    gs.current_piece.y = 0
+                    gs.current_piece.is_valid_position = is_valid_position_func
+                    gs.current_piece.play_sound = play_sound_func
+
+                gs.next_piece_1 = gs.next_piece_2
+                if gs.next_piece_1:
+                    gs.next_piece_1.is_valid_position = is_valid_position_func
+                    gs.next_piece_1.play_sound = play_sound_func
+
+                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+
+                if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                    gs.game_over = True
+                    gs.current_piece = None
+            gs.last_fall_time = time.time()
+            gs.soft_drop_active = False
+        else: # Piece still falling
+            gs.last_fall_time = time.time()
+    return None
+
+def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag):
+    # Line Animation Phase
+    # Modifies: gs (grid, score, level, etc.), gs.current_piece, gs.next_piece_1, gs.next_piece_2, gs.game_over
+    # Returns: updated line_animation_timer_val, lines_being_animated_list, new_game_phase_str
+    # Dependencies: _finalize_line_clear, calculate_fall_speed, add_garbage_blocks, is_valid_position_func, Piece
+
+    line_animation_timer_val -= 1
+    new_game_phase_str = "LINE_ANIMATION" # Default to staying in this phase
+
+    if line_animation_timer_val <= 0:
+        finalize_result = _finalize_line_clear(
+            gs.game_grid, lines_being_animated_list,
+            gs.score, gs.current_level, gs.total_lines_cleared, gs.lines_for_current_level
+        )
+        gs.game_grid = finalize_result["grid_data"]
+        gs.score = finalize_result["current_score"]
+        gs.current_level = finalize_result["level"]
+        gs.total_lines_cleared = finalize_result["total_lines"]
+        gs.lines_for_current_level = finalize_result["lines_for_lvl"]
+
+        if finalize_result["leveled_up"]:
+            gs.current_fall_speed = calculate_fall_speed(gs.current_level)
+            if add_garbage_blocks(gs.game_grid, gs.current_level): # add_garbage_blocks uses global Piece
+                gs.game_over = True
+                gs.current_piece = None
+
+        if not gs.game_over:
+            gs.current_piece = gs.next_piece_1
+            if gs.current_piece:
+                gs.current_piece.x = GRID_WIDTH // 2
+                gs.current_piece.y = 0
+                gs.current_piece.is_valid_position = is_valid_position_func
+                gs.current_piece.play_sound = play_sound_func
+
+            gs.next_piece_1 = gs.next_piece_2
+            if gs.next_piece_1:
+                gs.next_piece_1.is_valid_position = is_valid_position_func
+                gs.next_piece_1.play_sound = play_sound_func
+
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+
+            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                gs.game_over = True
+                gs.current_piece = None
+
+        lines_being_animated_list = []
+        new_game_phase_str = "PLAYING"
+        gs.last_fall_time = time.time()
+
+    return line_animation_timer_val, lines_being_animated_list, new_game_phase_str
+
 
 def handle_game_over_inputs(event):
     """
@@ -712,7 +542,7 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
         elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
             # Calculate target_y for hard drop by simulating fall until invalid
             original_y = current_piece.y
-            temp_piece_for_calc = Piece(current_piece.x, original_y, current_piece.shape_type)
+            temp_piece_for_calc = Piece(current_piece.x, original_y, shape_type=current_piece.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
             temp_piece_for_calc.rotation = current_piece.rotation
             calculated_target_y = original_y
             while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
@@ -734,9 +564,9 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
 def reset_game_state():
     """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
-    current_piece = spawn_piece_at_start()
-    next_piece_1 = Piece(0, 0) # Piece class handles random shape_type if None
-    next_piece_2 = Piece(0, 0) # Second next piece
+    current_piece = spawn_piece_at_start() # Already passes functions
+    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
 
     game_over = False
     if not is_valid_position(current_piece, game_grid):
@@ -1310,190 +1140,104 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
     }
 
 def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag): # Added line_blink_enabled_flag, next_piece_1_obj, next_piece_2_obj
-    # --- Game Logic (AI, Piece Movement, Physics) ---
+    # Create a GameState object to pass around
+    gs = type('GameState', (), {})() # Simple namespace object for now
+    gs.game_over = game_over_flag
+    gs.ai_mode_active = ai_mode_flag # This was 'ai_mode_flag' in old signature
+    gs.current_piece = current_piece_obj
+    gs.next_piece_1 = next_piece_1_obj
+    gs.next_piece_2 = next_piece_2_obj
+    gs.game_grid = game_grid_data
+    gs.score = score_val
+    gs.current_level = current_level_val
+    gs.total_lines_cleared = total_lines_cleared_val
+    gs.lines_for_current_level = lines_for_current_level_val
+    gs.current_fall_speed = current_fall_speed_val
+    gs.last_fall_time = last_fall_time_val
+    gs.soft_drop_active = soft_drop_flag
+    gs.game_over_sound_played = game_over_sound_played_flag
+    gs.last_ai_move_time = last_ai_move_time_val
+    # game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val are mostly for time display
+    gs.game_paused = game_paused_flag # Added from original signature
 
-    if game_phase_str == "LINE_ANIMATION":
-        line_animation_timer_val -= 1
-        if line_animation_timer_val <= 0:
-            # Call _finalize_line_clear
-            finalize_result = _finalize_line_clear(
-                game_grid_data, lines_being_animated_list,
-                score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val
-            )
-            # Update states from finalize_result
-            game_grid_data = finalize_result["grid_data"]
-            score_val = finalize_result["current_score"]
-            current_level_val = finalize_result["level"]
-            total_lines_cleared_val = finalize_result["total_lines"]
-            lines_for_current_level_val = finalize_result["lines_for_lvl"]
+    # Local vars for phase transitions, to be returned
+    current_game_phase = game_phase_str
+    current_lines_being_animated = lines_being_animated_list
+    current_line_animation_timer = line_animation_timer_val
 
-            if finalize_result["leveled_up"]:
-                current_fall_speed_val = calculate_fall_speed(current_level_val)
-                # Call add_garbage_blocks and handle game_over if it returns True
-                if add_garbage_blocks(game_grid_data, current_level_val):
-                    game_over_flag = True
-                    current_piece_obj = None # Ensure no piece if game over from garbage
+    if current_game_phase == "LINE_ANIMATION":
+        current_line_animation_timer, current_lines_being_animated, current_game_phase = \
+            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag)
 
-            # Spawn next piece (only if not game over from garbage)
-            if not game_over_flag:
-                current_piece_obj = next_piece_1_obj # NEW
-                if current_piece_obj:
-                    current_piece_obj.x = GRID_WIDTH // 2
-                    current_piece_obj.y = 0
+    elif current_game_phase == "PLAYING" and not gs.game_paused:
+        if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+            _process_ai_move(gs, play_sound, is_valid_position)
+            # AI move might set piece to hard drop or cause game over
 
-                next_piece_1_obj = next_piece_2_obj # NEW
-                next_piece_2_obj = Piece(0, 0)   # NEW - Generate a new piece for the second slot
+        # IMPORTANT: Check gs.current_piece again as AI might have made it None (e.g. game over)
+        # or if it completed a hard drop in a theoretical synchronous way (not current design but good check)
+        if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
+            if not gs.game_over: # Don't process if AI already detected game over
+                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                if hard_drop_result:
+                    current_game_phase = hard_drop_result['game_phase_str']
+                    current_lines_being_animated = hard_drop_result['lines_being_animated']
+                    current_line_animation_timer = hard_drop_result['line_animation_timer']
 
-                if not is_valid_position(current_piece_obj, game_grid_data):
-                    game_over_flag = True
-                    current_piece_obj = None
-
-            lines_being_animated_list = [] # Clear animated lines
-            game_phase_str = "PLAYING"    # Transition back to playing
-            last_fall_time_val = time.time()
-
-    # Game logic should only run during "PLAYING" phase and if not paused (e.g. by help screen).
-    elif game_phase_str == "PLAYING" and not game_paused_flag:
-        # --- AI Player Decision Logic ---
-        if ai_mode_flag and not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
-            if time.time() - last_ai_move_time_val > AI_MOVE_DELAY:
-                grid_copy_for_ai = clone_grid(game_grid_data)
-                best_move_info = find_best_move(grid_copy_for_ai, current_piece_obj, next_piece_1_obj) # Use next_piece_1_obj
-
-                if best_move_info and best_move_info['x'] != -1:
-                    current_piece_obj.rotation = best_move_info['rotation']
-                    current_piece_obj.x = best_move_info['x']
-                    current_piece_obj.target_y_for_animated_drop = best_move_info['landing_y']
-                    current_piece_obj.is_hard_dropping_animated = True
-                    soft_drop_flag = False
-                else:
-                    if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
-                    game_over_flag = True
-                last_ai_move_time_val = time.time()
-
-        # --- Animated Hard Drop Logic ---
-        if not game_over_flag and current_piece_obj and current_piece_obj.is_hard_dropping_animated:
-            current_piece_obj.y += 1
-            if current_piece_obj.y >= current_piece_obj.target_y_for_animated_drop:
-                current_piece_obj.y = current_piece_obj.target_y_for_animated_drop
-                current_piece_obj.is_hard_dropping_animated = False
-                add_to_grid(current_piece_obj, game_grid_data)
-
-                cleared_row_indices = get_full_lines(game_grid_data)
-                if cleared_row_indices:
-                    game_phase_str = "LINE_ANIMATION"
-                    lines_being_animated_list = cleared_row_indices
-                    if line_blink_enabled_flag:
-                        line_animation_timer_val = LINE_ANIMATION_DURATION
-                    else:
-                        line_animation_timer_val = 1
-                    if len(cleared_row_indices) == 4: play_sound("tetris_clear")
-                    elif len(cleared_row_indices) > 0: play_sound("line_clear")
-                    current_piece_obj = None # Piece locked, wait for animation
-                else: # No lines cleared
-                    current_piece_obj = next_piece_1_obj # NEW
-                    if current_piece_obj:
-                        current_piece_obj.x = GRID_WIDTH // 2
-                        current_piece_obj.y = 0
-
-                    next_piece_1_obj = next_piece_2_obj # NEW
-                    next_piece_2_obj = Piece(0, 0)   # NEW
-
-                    if not is_valid_position(current_piece_obj, game_grid_data):
-                        game_over_flag = True
-                        current_piece_obj = None
-
-                last_fall_time_val = time.time()
-                soft_drop_flag = False
-
-        # --- Automatic Piece Descent ---
-        if not game_over_flag and current_piece_obj and not current_piece_obj.is_hard_dropping_animated:
-            fall_interval = current_fall_speed_val
-            if soft_drop_flag: fall_interval = min(current_fall_speed_val, 0.05)
-
-            if time.time() - last_fall_time_val > fall_interval:
-                current_piece_obj.y += 1
-                if not is_valid_position(current_piece_obj, game_grid_data):
-                    current_piece_obj.y -= 1
-                    add_to_grid(current_piece_obj, game_grid_data)
-
-                    cleared_row_indices = get_full_lines(game_grid_data)
-                    if cleared_row_indices:
-                        game_phase_str = "LINE_ANIMATION"
-                        lines_being_animated_list = cleared_row_indices
-                        if line_blink_enabled_flag:
-                            line_animation_timer_val = LINE_ANIMATION_DURATION
-                        else:
-                            line_animation_timer_val = 1
-                        if len(cleared_row_indices) == 4: play_sound("tetris_clear")
-                        elif len(cleared_row_indices) > 0: play_sound("line_clear")
-                        current_piece_obj = None # Piece locked, wait for animation
-                    else: # No lines cleared
-                        current_piece_obj = next_piece_1_obj # NEW
-                        if current_piece_obj:
-                            current_piece_obj.x = GRID_WIDTH // 2
-                            current_piece_obj.y = 0
-
-                        next_piece_1_obj = next_piece_2_obj # NEW
-                        next_piece_2_obj = Piece(0, 0)   # NEW
-
-                        if not is_valid_position(current_piece_obj, game_grid_data):
-                            game_over_flag = True
-                            current_piece_obj = None
-
-                    last_fall_time_val = time.time()
-                    soft_drop_flag = False # Reset soft drop after piece lands
-                else: # Piece still falling
-                    last_fall_time_val = time.time()
-
+        # IMPORTANT: Check gs.current_piece again as hard drop might have cleared lines and set it to None
+        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated: # Note: added elif
+             if not gs.game_over: # Don't process if AI/Hard drop already detected game over
+                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                if descent_result:
+                    current_game_phase = descent_result['game_phase_str']
+                    current_lines_being_animated = descent_result['lines_being_animated']
+                    current_line_animation_timer = descent_result['line_animation_timer']
 
     # --- Game Over State Update (after all game logic for the frame) ---
-    if game_over_flag and not game_over_sound_played_flag:
-        play_sound("game_over"); game_over_sound_played_flag = True
-        current_piece_obj = None # Ensure no piece is active
-        if final_game_time_str_val is None:
+    if gs.game_over and not gs.game_over_sound_played:
+        play_sound("game_over")
+        gs.game_over_sound_played = True
+        gs.current_piece = None # Ensure no piece is active
+        if final_game_time_str_val is None: # final_game_time_str_val is from original signature
             current_elapsed_time = time.time() - game_start_time_val - total_paused_duration_val
-            final_game_time_str_val = format_time(max(0, current_elapsed_time))
+            final_game_time_str_val = format_time(max(0, current_elapsed_time)) # This should be gs.final_game_time_str
 
-    # Determine the time string to display (live or final frozen time)
+    # Determine the time string to display
     calculated_formatted_time_str = ""
-    if game_over_flag and final_game_time_str_val:
+    if gs.game_over and final_game_time_str_val: # final_game_time_str_val from original signature
         calculated_formatted_time_str = final_game_time_str_val
-    elif game_paused_flag:
+    elif gs.game_paused:
+        # time_at_pause_val and game_start_time_val are from original signature
         elapsed_at_pause_moment = (time_at_pause_val - game_start_time_val) - total_paused_duration_val
         calculated_formatted_time_str = format_time(max(0, elapsed_at_pause_moment))
     else:
         current_elapsed_seconds = (time.time() - game_start_time_val) - total_paused_duration_val
         calculated_formatted_time_str = format_time(max(0, current_elapsed_seconds))
 
+    # Return values based on the updated gs and local phase vars
     return {
-        "game_over": game_over_flag,
-        "current_piece": current_piece_obj, # Potentially set to None
-        "next_piece_1": next_piece_1_obj, # Updated
-        "next_piece_2": next_piece_2_obj, # Updated
-        "game_grid": game_grid_data,
-        "score": score_val,
-        "current_level": current_level_val,
-        "total_lines_cleared": total_lines_cleared_val,
-        "lines_for_current_level": lines_for_current_level_val,
-        "current_fall_speed": current_fall_speed_val,
-        "last_fall_time": last_fall_time_val,
-        "soft_drop_active": soft_drop_flag,
-        "game_over_sound_played": game_over_sound_played_flag,
-        "last_ai_move_time": last_ai_move_time_val,
-        "final_game_time_str": final_game_time_str_val,
+        "game_over": gs.game_over,
+        "current_piece": gs.current_piece,
+        "next_piece_1": gs.next_piece_1,
+        "next_piece_2": gs.next_piece_2,
+        "game_grid": gs.game_grid,
+        "score": gs.score,
+        "current_level": gs.current_level,
+        "total_lines_cleared": gs.total_lines_cleared,
+        "lines_for_current_level": gs.lines_for_current_level,
+        "current_fall_speed": gs.current_fall_speed,
+        "last_fall_time": gs.last_fall_time,
+        "soft_drop_active": gs.soft_drop_active,
+        "game_over_sound_played": gs.game_over_sound_played,
+        "last_ai_move_time": gs.last_ai_move_time,
+        "final_game_time_str": final_game_time_str_val, # from original signature, should be gs.final_game_time_str
         "formatted_time": calculated_formatted_time_str,
-        "game_phase_str": game_phase_str, # Updated
-        "lines_being_animated": lines_being_animated_list, # Added
-        "line_animation_timer": line_animation_timer_val, # Added
-        "game_grid": game_grid_data, # Added (potentially modified)
-        "score": score_val, # Added (potentially modified)
-        "current_level": current_level_val, # Added (potentially modified)
-        "total_lines_cleared": total_lines_cleared_val, # Added (potentially modified)
-        "lines_for_current_level": lines_for_current_level_val, # Added (potentially modified)
-        "current_fall_speed": current_fall_speed_val, # Added (potentially modified)
-        "next_piece_1": next_piece_1_obj, # Added (potentially modified)
-        "next_piece_2": next_piece_2_obj # Added (potentially modified)
+        "game_phase_str": current_game_phase,
+        "lines_being_animated": current_lines_being_animated,
+        "line_animation_timer": current_line_animation_timer,
+        # For any other gs attributes that might have been in the original return dict implicitly
+        "ai_mode_active": gs.ai_mode_active, # ensure all relevant gs fields are part of the effective return
+        "game_paused": gs.game_paused,
     }
 
 def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, level, total_lines, lines_for_lvl):
