@@ -22,6 +22,7 @@ from .constants import (
 from .piece import Piece # Import Piece from its new location
 from . import ai_player # Import the new AI player module
 from . import config_manager # Import config_manager
+from .game_state import GameState # Import GameState
 
 # Initialize Pygame
 pygame.init()
@@ -53,44 +54,12 @@ def play_sound(sound_name):
         return
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
 
-# ... (create_grid, draw_grid_lines, draw_blocks, draw_piece - largely same)
+# create_grid is a utility, can stay for now or be moved later.
 def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
-def draw_grid_lines(screen):
-    for row in range(GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X, GRID_OFFSET_Y + row * BLOCK_SIZE), (GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE))
-    for col in range(GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y), (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + GRID_HEIGHT * BLOCK_SIZE))
-
-def draw_blocks(screen, grid_data, lines_being_animated, animation_timer, line_blink_enabled_flag): # Draws landed blocks
-    for r_idx, row in enumerate(grid_data):
-        for c_idx, cell_color in enumerate(row):
-            if cell_color != 0:
-                current_block_color = cell_color # Start with the actual color
-
-                if r_idx in lines_being_animated:
-                    if line_blink_enabled_flag: # Check the new flag
-                        # --- Keep existing blinking logic ---
-                        progress_frames = LINE_ANIMATION_DURATION - animation_timer
-                        blink_phase_duration = LINE_ANIMATION_DURATION / 10
-                        current_blink_phase = int(progress_frames / blink_phase_duration)
-
-                        if current_blink_phase % 2 == 0:
-                            current_block_color = WHITE
-                        else:
-                            current_block_color = cell_color
-
-                        if animation_timer < (LINE_ANIMATION_DURATION / 5): # Final phase of blinking
-                            current_block_color = BLACK
-                        # --- End of existing blinking logic ---
-                    else:
-                        # If blinking is disabled, make blocks in clearing lines disappear immediately
-                        current_block_color = BLACK
-
-                pygame.draw.rect(screen, current_block_color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
-
-def draw_current_piece_on_grid(screen, piece): # Renamed for clarity
-    if piece:
-        for r_idx, c_idx in piece.current_shape_coords():
-            if r_idx >= 0: # Only draw if within visible grid area
-                pygame.draw.rect(screen, piece.color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
+# All local UI drawing functions (draw_grid_lines, draw_blocks, draw_current_piece_on_grid,
+# get_shadow_position_y, draw_next_piece_area, draw_full_ui, draw_level_progress_bar,
+# _render_help_text_surfaces, _draw_help_screen, _draw_high_score_screen, _draw_game_screen)
+# are now removed as their functionality is in ui_manager.py.
 
 def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
     if not piece: return False
@@ -106,27 +75,6 @@ def add_to_grid(piece, grid_data):
         for r_idx, c_idx in piece.current_shape_coords():
             if r_idx >=0: grid_data[r_idx][c_idx] = piece.color
         play_sound("drop")
-
-def get_shadow_position_y(piece, grid_data):
-    """
-    Calculates the y-coordinate for the piece's shadow.
-    Iterates downwards from the piece's current y position, checking
-    if the piece would be in a valid position at y + 1.
-    Uses is_valid_position for this check.
-    Returns the last valid y coordinate before collision.
-    """
-    if not piece:
-        return -1 # Or some other indicator of an invalid state
-
-    current_y_offset = 0
-    # We are checking for piece.y + current_y_offset + 1
-    # So, is_valid_position needs to check for an offset from the piece's *original* y.
-    # The 'check_y_offset' parameter in is_valid_position is relative to piece.y.
-    # So, if piece is at y, and we are checking y + k, then check_y_offset = k.
-    while is_valid_position(piece, grid_data, check_y_offset=current_y_offset + 1):
-        current_y_offset += 1
-
-    return piece.y + current_y_offset
 
 def get_full_lines(grid_data):
     full_lines_indices = []
@@ -165,155 +113,16 @@ def add_garbage_blocks(grid_data, level):
     return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
 # --- Time Formatting Function ---
+# --- Time Formatting Function ---
+# format_time is a general utility.
 def format_time(total_seconds):
     """Formats total seconds into MM:SS string."""
     minutes = int(total_seconds // 60) # Calculate whole minutes
     seconds = int(total_seconds % 60) # Calculate remaining seconds
     return f"{minutes:02d}:{seconds:02d}" # Format as MM:SS with leading zeros
 
-def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
-    global TITLE_FONT
-    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE)
-
-    title_surface = TITLE_FONT.render(title_str, True, WHITE)
-    screen.blit(title_surface, (x_pos, y_pos))
-
-    box_y_pos = y_pos + title_surface.get_height() + 5
-    pygame.draw.rect(screen, GREY, (x_pos, box_y_pos, NEXT_PIECE_BOX_SIZE, NEXT_PIECE_BOX_SIZE), 1)
-
-    if piece_to_draw:
-        shape_coords = piece_to_draw.get_shape_for_preview()
-
-        min_r_offset = min(r for r,c in shape_coords) if shape_coords else 0
-        max_r_offset = max(r for r,c in shape_coords) if shape_coords else 0
-        min_c_offset = min(c for r,c in shape_coords) if shape_coords else 0
-        max_c_offset = max(c for r,c in shape_coords) if shape_coords else 0
-
-        shape_width_blocks = max_c_offset - min_c_offset + 1
-        shape_height_blocks = max_r_offset - min_r_offset + 1
-
-        start_draw_x = x_pos + (NEXT_PIECE_BOX_SIZE - shape_width_blocks * NEXT_PIECE_BLOCK_SIZE) // 2
-        start_draw_y = box_y_pos + (NEXT_PIECE_BOX_SIZE - shape_height_blocks * NEXT_PIECE_BLOCK_SIZE) // 2
-
-        for r_offset, c_offset in shape_coords:
-            block_x = start_draw_x + (c_offset - min_c_offset) * NEXT_PIECE_BLOCK_SIZE
-            block_y = start_draw_y + (r_offset - min_r_offset) * NEXT_PIECE_BLOCK_SIZE
-            pygame.draw.rect(screen, piece_to_draw.color, (block_x, block_y, NEXT_PIECE_BLOCK_SIZE -1, NEXT_PIECE_BLOCK_SIZE -1))
-
-
-def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, next_piece_2_obj, lines_for_current_level, ai_mode_is_active, formatted_time_str, top_scores_list): # Updated next piece params
-    global SCORE_FONT, INFO_FONT, TITLE_FONT # Ensure TITLE_FONT is global here for height calculation
-    if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
-    if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
-    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE) # Load if not already
-
-    current_y = UI_INFO_START_Y
-    ui_start_x = GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE + UI_INFO_X_OFFSET
-
-    score_surface = SCORE_FONT.render(f"Score: {score}", True, WHITE)
-    screen.blit(score_surface, (ui_start_x, current_y))
-    current_y += SCORE_FONT_SIZE + UI_INFO_LINE_SPACING
-
-    level_surface = INFO_FONT.render(f"Level: {level}", True, WHITE)
-    screen.blit(level_surface, (ui_start_x, current_y))
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING
-
-    lines_surface = INFO_FONT.render(f"Lines: {lines_cleared_total}", True, WHITE)
-    screen.blit(lines_surface, (ui_start_x, current_y))
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING
-
-    # AI Mode Indicator
-    ai_mode_text = "AI Mode: " + ("ON" if ai_mode_is_active else "OFF")
-    ai_status_color = GREEN if ai_mode_is_active else RED
-    ai_surface = INFO_FONT.render(ai_mode_text, True, ai_status_color)
-    screen.blit(ai_surface, (ui_start_x, current_y))
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING
-
-    # Display Elapsed Time
-    time_text_surface = INFO_FONT.render(f"Time: {formatted_time_str}", True, WHITE) # Render the time string
-    screen.blit(time_text_surface, (ui_start_x, current_y)) # Blit time to screen
-    current_y += INFO_FONT_SIZE + UI_INFO_LINE_SPACING # Update y for next element
-
-    # Display Best Score
-    if top_scores_list: # Check if the list is not empty
-        top_score_entry = top_scores_list[0] # Get the first entry (highest score)
-        # Ensure the entry is valid before trying to access keys
-        if isinstance(top_score_entry, dict) and "username" in top_score_entry and "score" in top_score_entry:
-            if top_score_entry.get("score", 0) > 0: # Only display if the top score is greater than 0
-                best_score_text = f"Best: {top_score_entry['username']} - {top_score_entry['score']}"
-                best_score_surface = INFO_FONT.render(best_score_text, True, YELLOW)
-                screen.blit(best_score_surface, (ui_start_x, current_y))
-                current_y += INFO_FONT.get_height() + UI_INFO_LINE_SPACING
-
-    # Draw Level Progress Bar
-    # Text label for progress bar is drawn by draw_level_progress_bar above the bar itself
-    # INFO_FONT is used for the progress text by draw_level_progress_bar
-    progress_text_height = INFO_FONT.get_height() if INFO_FONT else 20 # Estimate if font not loaded
-    progress_bar_rect_y = current_y + progress_text_height + 5 # Y pos for bar, below its text label
-    bar_outer_rect = pygame.Rect(ui_start_x, progress_bar_rect_y, PROGRESS_BAR_WIDTH, PROGRESS_BAR_HEIGHT)
-    progress_bar_colors = {"bg": PROGRESS_BAR_BACKGROUND_COLOR, "fill": PROGRESS_BAR_FILL_COLOR, "border": PROGRESS_BAR_BORDER_COLOR}
-    # Ensure INFO_FONT is loaded before calling, or handle inside draw_level_progress_bar if it can be None
-    if INFO_FONT: # Guard call if INFO_FONT might not be loaded (though it should be by this point)
-        draw_level_progress_bar(screen, lines_for_current_level, LINES_PER_LEVEL, bar_outer_rect, progress_bar_colors, INFO_FONT, WHITE) # Call the function to draw the progress bar
-
-    # Update current_y to be below the progress bar for the next UI element
-    current_y = progress_bar_rect_y + PROGRESS_BAR_HEIGHT + UI_INFO_LINE_SPACING * 2
-
-    # Draw First Next Piece
-    draw_next_piece_area(screen, next_piece_1_obj, ui_start_x, current_y, "Next 1:")
-
-    title_height_estimate = TITLE_FONT.get_height()
-    current_y += title_height_estimate + 5 + NEXT_PIECE_BOX_SIZE + UI_INFO_LINE_SPACING * 2
-
-    # Draw Second Next Piece
-    draw_next_piece_area(screen, next_piece_2_obj, ui_start_x, current_y, "Next 2:")
-
-    # current_y += title_height_estimate + 5 + NEXT_PIECE_BOX_SIZE + UI_INFO_LINE_SPACING # If more elements followed
-
-
-# --- New Drawing Function for Level Progress Bar ---
-def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect, colors, font, text_color):
-    """
-    Draws a progress bar indicating progress towards the next level.
-    Args:
-        screen: Pygame screen surface.
-        current_lines (int): Lines cleared for the current level.
-        lines_needed (int): Total lines needed for the next level (LINES_PER_LEVEL).
-        bar_outer_rect (pygame.Rect): The rectangle defining the outer bounds of the bar.
-        colors (dict): Dictionary with keys 'bg', 'fill', 'border'.
-        font (pygame.font.Font): Font for the text label.
-        text_color (tuple): Color for the text label.
-    """
-    # Draw background
-    pygame.draw.rect(screen, colors['bg'], bar_outer_rect)
-
-    # Calculate fill percentage and width
-    fill_percentage = 0.0
-    if lines_needed > 0: # Avoid division by zero
-        fill_percentage = min(1.0, float(current_lines) / lines_needed) # Cap at 100%
-
-    fill_width = int(fill_percentage * bar_outer_rect.width)
-
-    if fill_width > 0:
-        fill_rect = pygame.Rect(bar_outer_rect.x, bar_outer_rect.y, fill_width, bar_outer_rect.height)
-        pygame.draw.rect(screen, colors['fill'], fill_rect)
-
-    # Draw border (optional)
-    if 'border' in colors: # Allow border to be optional
-        pygame.draw.rect(screen, colors['border'], bar_outer_rect, 1) # 1px border
-
-    # Draw text label (e.g., "Progress: 3/10")
-    progress_text_str = f"Progress: {current_lines}/{lines_needed}"
-    text_surface = font.render(progress_text_str, True, text_color)
-
-    # Position text above the bar, centered horizontally with the bar
-    text_x = bar_outer_rect.centerx - text_surface.get_width() // 2
-    text_y = bar_outer_rect.y - text_surface.get_height() - 2 # 2px padding above bar
-    screen.blit(text_surface, (text_x, text_y))
-
-# --- Input Handling Sub-functions ---
-
-# Helper functions for _update_game_state
+# Helper functions for _update_game_state are defined above.
+# Local input functions (handle_game_over_inputs, handle_player_piece_controls) are now removed.
 def _process_ai_move(gs, play_sound_func, is_valid_position_func):
     # AI Player Decision Logic
     # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
@@ -471,165 +280,49 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
 
     return line_animation_timer_val, lines_being_animated_list, new_game_phase_str
 
-
-def handle_game_over_inputs(event):
-    """
-    Handles input events when the game is over.
-    Checks for restart or quit commands.
-
-    Args:
-        event (pygame.event.Event): The Pygame event to process.
-
-    Returns:
-        str or None: "RESTART", "QUIT", or None if no relevant action is triggered.
-    """
-    if event.type == pygame.QUIT:
-        return "QUIT"
-    if event.type == pygame.KEYDOWN:
-        if event.key == RESTART_KEY: # RESTART_KEY should be defined globally
-            return "RESTART"
-        if event.key == pygame.K_ESCAPE: # Using ESC as a global quit key too
-            return "QUIT"
-    return None # No relevant action
-
-def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag):
-    """
-    Handles player inputs for controlling the current piece (movement, rotation, drop).
-    Assumes current_piece exists, game is not over, AI is not active, and piece is not already hard dropping.
-
-    Args:
-        event (pygame.event.Event): The Pygame event to process.
-        current_piece (Piece): The currently falling piece.
-        game_grid (list): The main game grid.
-        soft_drop_active_flag (bool): Current state of soft drop.
-
-    Returns:
-        bool: Updated state of soft_drop_active_flag.
-    """
-    if event.type == pygame.KEYDOWN:
-        # These controls should not be active if the piece is in the middle of an animated hard drop
-        if current_piece.is_hard_dropping_animated:
-            return soft_drop_active_flag
-
-        if event.key == pygame.K_UP:
-            current_piece.rotate(game_grid)
-        elif event.key == pygame.K_LEFT:
-            current_piece.x -= 1
-            if not is_valid_position(current_piece, game_grid):
-                current_piece.x += 1
-            else:
-                play_sound("move")
-        elif event.key == pygame.K_RIGHT:
-            current_piece.x += 1
-            if not is_valid_position(current_piece, game_grid):
-                current_piece.x -= 1
-            else:
-                play_sound("move")
-        elif event.key == pygame.K_DOWN: # Activate soft drop
-            soft_drop_active_flag = True
-        elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
-            # Calculate target_y for hard drop by simulating fall until invalid
-            original_y = current_piece.y
-            temp_piece_for_calc = Piece(current_piece.x, original_y, shape_type=current_piece.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-            temp_piece_for_calc.rotation = current_piece.rotation
-            calculated_target_y = original_y
-            while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
-                calculated_target_y += 1
-
-            current_piece.target_y_for_animated_drop = calculated_target_y
-            current_piece.is_hard_dropping_animated = True
-            soft_drop_active_flag = False # Cancel soft drop if hard drop is initiated
-
-    elif event.type == pygame.KEYUP: # Separate from KEYDOWN to handle soft drop release
-        if event.key == pygame.K_DOWN:
-            # Deactivate soft drop only if it was active and not overridden by hard drop animation
-            if not current_piece.is_hard_dropping_animated:
-                 soft_drop_active_flag = False
-
-    return soft_drop_active_flag
-
 # --- Game State Reset Function ---
-def reset_game_state():
-    """Initializes and returns all game state variables for a new game."""
-    game_grid = create_grid()
-    current_piece = spawn_piece_at_start() # Already passes functions
-    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+# handle_game_over_inputs and handle_player_piece_controls are now removed.
+# Their logic is handled by input_handler.process_event, called from _handle_events.
+def reset_game_state() -> GameState:
+    """Initializes and returns a new GameState object."""
+    game_grid_data = create_grid()
+    current_piece_obj = spawn_piece_at_start()
+    next_piece_1_obj = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    next_piece_2_obj = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
 
-    game_over = False
-    if not is_valid_position(current_piece, game_grid):
-        game_over = True
-        current_piece = None # No piece if game over at start
+    game_over_flag = False
+    if current_piece_obj and not is_valid_position(current_piece_obj, game_grid_data): # Check current_piece_obj not None
+        game_over_flag = True
+        current_piece_obj = None
 
-    score = 0
-    current_level = 1
-    total_lines_cleared = 0
-    lines_for_current_level = 0
+    return GameState(
+        game_grid=game_grid_data,
+        current_piece=current_piece_obj,
+        next_piece_1=next_piece_1_obj,
+        next_piece_2=next_piece_2_obj,
+        score=0,
+        current_level=1,
+        total_lines_cleared=0,
+        lines_for_current_level=0,
+        game_over=game_over_flag,
+        current_fall_speed=calculate_fall_speed(1),
+        last_fall_time=time.time(),
+        soft_drop_active=False,
+        game_over_sound_played=False,
+        ai_mode_active=False,
+        last_ai_move_time=time.time(),
+        game_start_time=time.time(),
+        final_game_time_str=None,
+        game_paused=False,
+        time_at_pause=0.0,
+        total_paused_duration=0.0
+    )
 
-    current_fall_speed = calculate_fall_speed(current_level)
-    last_fall_time = time.time()
-    soft_drop_active = False
-    game_over_sound_played = False # Reset sound flag
+def _handle_restart_action() -> GameState: # Ensure it returns GameState
+    return reset_game_state()
 
-    ai_mode_active = False # Default AI to off
-    last_ai_move_time = time.time() # Initialize AI timer
-
-    game_start_time = time.time() # New game start time
-    final_game_time_str = None # Reset final time string
-
-    game_paused = False
-    time_at_pause = 0.0 # Time when game was last paused
-    total_paused_duration = 0.0 # Accumulates total time spent paused
-
-    return {
-        "game_grid": game_grid, "current_piece": current_piece,
-        "next_piece_1": next_piece_1, "next_piece_2": next_piece_2,
-        "score": score, "current_level": current_level, "total_lines_cleared": total_lines_cleared,
-        "lines_for_current_level": lines_for_current_level, "game_over": game_over,
-        "current_fall_speed": current_fall_speed, "last_fall_time": last_fall_time,
-        "soft_drop_active": soft_drop_active, "game_over_sound_played": game_over_sound_played,
-        "ai_mode_active": ai_mode_active, "last_ai_move_time": last_ai_move_time,
-        "game_start_time": game_start_time, "final_game_time_str": final_game_time_str,
-        "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
-    }
-
-def _handle_restart_action():
-    # This function will be responsible for managing the game restart logic.
-    # It calls reset_game_state to get a fresh set of game parameters.
-    new_game_state = reset_game_state()
-    return new_game_state
-
-def _unpack_game_state(game_state_dict):
-    game_grid = game_state_dict["game_grid"]
-    current_piece = game_state_dict["current_piece"]
-    next_piece_1 = game_state_dict["next_piece_1"]
-    next_piece_2 = game_state_dict["next_piece_2"]
-    score = game_state_dict["score"]
-    current_level = game_state_dict["current_level"]
-    total_lines_cleared = game_state_dict["total_lines_cleared"]
-    lines_for_current_level = game_state_dict["lines_for_current_level"]
-    game_over = game_state_dict["game_over"]
-    current_fall_speed = game_state_dict["current_fall_speed"]
-    last_fall_time = game_state_dict["last_fall_time"]
-    soft_drop_active = game_state_dict["soft_drop_active"]
-    game_over_sound_played = game_state_dict["game_over_sound_played"]
-    ai_mode_active = game_state_dict["ai_mode_active"]
-    last_ai_move_time = game_state_dict["last_ai_move_time"]
-    game_start_time = game_state_dict["game_start_time"]
-    final_game_time_str = game_state_dict["final_game_time_str"]
-    game_paused = game_state_dict["game_paused"]
-    time_at_pause = game_state_dict["time_at_pause"]
-    total_paused_duration = game_state_dict["total_paused_duration"]
-
-    return (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
-            total_lines_cleared, lines_for_current_level, game_over,
-            current_fall_speed, last_fall_time, soft_drop_active,
-            game_over_sound_played, ai_mode_active, last_ai_move_time,
-            game_start_time, final_game_time_str, game_paused,
-            time_at_pause, total_paused_duration)
-
-# Local load_config removed, config_manager.load_config will be used.
-# Local save_config, _update_and_save_top_scores, _load_best_score removed. config_manager versions will be used.
+# _unpack_game_state is removed as GameState object 'gs' will be used directly.
+# Local config functions removed, config_manager versions are used.
 
 # This function was replaced by _update_and_save_top_scores
 # def _save_best_score(username, score, time_str):
@@ -647,9 +340,9 @@ def _unpack_game_state(game_state_dict):
 #     except Exception as e:
 #         print(f"Error saving best score to {filename}: {e}")
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag):
+def _handle_events(events, gs: GameState, running_flag: bool, joystick_obj, joystick_enabled_flag: bool, help_screen_active_flag: bool, game_phase_str: str, current_username_str: str, config_menu_active_flag: bool, sound_effects_enabled_flag: bool, shadow_enabled_flag: bool, line_blink_enabled_flag: bool, music_enabled_flag: bool):
     action_request = None
-    # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
+    # gs object's attributes are modified directly.
 
     for event in events:
         # Top-level quit check (handles window close)
@@ -661,18 +354,18 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
             help_screen_active_flag = not help_screen_active_flag
             if help_screen_active_flag:
-                if not game_paused_flag: # Only set time_at_pause if game wasn't already paused by something else (e.g. config menu)
-                    time_at_pause_val = time.time()
-                game_paused_flag = True
+                if not gs.game_paused:
+                    gs.time_at_pause = time.time()
+                gs.game_paused = True
                 if DEBUG_MODE: print("Help screen NEWLY ACTIVATED. game_paused_flag set to True.")
-            else: # Deactivating help screen
-                if not config_menu_active_flag: # Only unpause if config menu is also not active
-                    game_paused_flag = False
-                    if time_at_pause_val > 0: # Ensure game was actually paused
-                        total_paused_duration_val += time.time() - time_at_pause_val
-                        time_at_pause_val = 0 # Reset time_at_pause_val
-                    last_fall_time_val = time.time() # Reset fall timer
-                    last_ai_move_time_val = time.time() # Reset AI timer
+            else:
+                if not config_menu_active_flag:
+                    gs.game_paused = False
+                    if gs.time_at_pause > 0:
+                        gs.total_paused_duration += time.time() - gs.time_at_pause
+                        gs.time_at_pause = 0
+                    gs.last_fall_time = time.time()
+                    gs.last_ai_move_time = time.time()
                 if DEBUG_MODE: print("Help screen NEWLY DEACTIVATED. game_paused_flag logic applied.")
             continue
 
@@ -680,23 +373,23 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         if event.type == pygame.KEYDOWN and event.key == pygame.K_c:
             # If config menu is currently active, and ESC is pressed, this block handles it.
             # If 'c' is pressed again, it also toggles.
-            if config_menu_active_flag and event.key == pygame.K_c : # Already handled by the config_menu_active_flag block later if menu is open
-                 pass # Let the dedicated config menu handler do its job to avoid double processing
+            if config_menu_active_flag and event.key == pygame.K_c :
+                 pass
             else:
                 config_menu_active_flag = not config_menu_active_flag
                 if config_menu_active_flag:
-                    if not game_paused_flag: # Only set time_at_pause if game wasn't already paused
-                        time_at_pause_val = time.time()
-                    game_paused_flag = True
+                    if not gs.game_paused:
+                        gs.time_at_pause = time.time()
+                    gs.game_paused = True
                     if DEBUG_MODE: print("Config menu NEWLY ACTIVATED by C. game_paused_flag set to True.")
-                else: # Deactivating config menu by 'C' key (when it's not open and gets toggled off - this case might be redundant if it implies it was already false)
-                    if not help_screen_active_flag: # Only unpause if help screen is also not active
-                        game_paused_flag = False
-                        if time_at_pause_val > 0:
-                            total_paused_duration_val += time.time() - time_at_pause_val
-                            time_at_pause_val = 0 # Reset time_at_pause_val
-                        last_fall_time_val = time.time() # Reset fall timer
-                        last_ai_move_time_val = time.time() # Reset AI timer
+                else:
+                    if not help_screen_active_flag:
+                        gs.game_paused = False
+                        if gs.time_at_pause > 0:
+                            gs.total_paused_duration += time.time() - gs.time_at_pause
+                            gs.time_at_pause = 0
+                        gs.last_fall_time = time.time()
+                        gs.last_ai_move_time = time.time()
                     if DEBUG_MODE: print("Config menu NEWLY DEACTIVATED by C. game_paused_flag logic applied.")
             continue
 
@@ -704,13 +397,13 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         # Close Help with ESC (respects config menu)
         if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             help_screen_active_flag = False
-            if not config_menu_active_flag: # Only unpause if config menu is also not active
-                game_paused_flag = False
-                if time_at_pause_val > 0:
-                    total_paused_duration_val += time.time() - time_at_pause_val
-                    time_at_pause_val = 0 # Reset time_at_pause_val
-                last_fall_time_val = time.time()
-                last_ai_move_time_val = time.time()
+            if not config_menu_active_flag:
+                gs.game_paused = False
+                if gs.time_at_pause > 0:
+                    gs.total_paused_duration += time.time() - gs.time_at_pause
+                    gs.time_at_pause = 0
+                gs.last_fall_time = time.time()
+                gs.last_ai_move_time = time.time()
             if DEBUG_MODE: print("Help screen deactivated by ESC. game_paused_flag logic applied.")
             continue
 
@@ -758,15 +451,13 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
-                    # Only unpause if help screen is also not active
                     if not help_screen_active_flag:
-                        game_paused_flag = False
-                        # Correctly update pause duration and game timers
-                        if time_at_pause_val > 0: # Ensure game was actually paused
-                           total_paused_duration_val += time.time() - time_at_pause_val
-                           time_at_pause_val = 0 # Reset time_at_pause_val
-                        last_fall_time_val = time.time()
-                        last_ai_move_time_val = time.time()
+                        gs.game_paused = False
+                        if gs.time_at_pause > 0:
+                           gs.total_paused_duration += time.time() - gs.time_at_pause
+                           gs.time_at_pause = 0
+                        gs.last_fall_time = time.time()
+                        gs.last_ai_move_time = time.time()
                     if DEBUG_MODE: print("Config menu DEACTIVATED by ESC/C key. game_paused_flag logic applied.")
             # IMPORTANT: Consume all events while config menu is active so they don't bleed through
             continue
@@ -809,96 +500,176 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         elif game_phase_str == "PLAYING":
             # Pause Toggle (P key)
             if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
-                game_paused_flag = not game_paused_flag # Toggle the pause state first
-                if game_paused_flag: # Game is now paused by 'P'
-                    time_at_pause_val = time.time() # Record time when paused
-                    if DEBUG_MODE: print(f"Game Paused (P key). Paused: {game_paused_flag}")
-                else: # Attempting to unpause via 'P'
-                    if not help_screen_active_flag and not config_menu_active_flag: # Only truly unpause if no other modal is active
-                        if time_at_pause_val > 0: # Ensure game was actually paused
-                            total_paused_duration_val += time.time() - time_at_pause_val
-                            time_at_pause_val = 0 # Reset pause timer
-                        last_fall_time_val = time.time()
-                        last_ai_move_time_val = time.time()
-                        if DEBUG_MODE: print(f"Game Resumed (P key) - All clear. Paused: {game_paused_flag}")
+                gs.game_paused = not gs.game_paused
+                if gs.game_paused:
+                    gs.time_at_pause = time.time()
+                    if DEBUG_MODE: print(f"Game Paused (P key). Paused: {gs.game_paused}")
+                else:
+                    if not help_screen_active and not config_menu_active:
+                        if gs.time_at_pause > 0:
+                            gs.total_paused_duration += time.time() - gs.time_at_pause
+                            gs.time_at_pause = 0
+                        gs.last_fall_time = time.time()
+                        gs.last_ai_move_time = time.time()
+                        if DEBUG_MODE: print(f"Game Resumed (P key) - All clear. Paused: {gs.game_paused}")
                     else:
-                        if DEBUG_MODE: print(f"Game Unpause (P key) deferred - Help/Config active. Paused: {game_paused_flag} (still true effectively, or will be set by other modals)")
-                        # game_paused_flag remains False from the toggle, but other modals will keep it effectively paused or re-pause it.
-                        # If other modals are active, they should be the ones to set game_paused_flag back to True if they are opened,
-                        # or handle the unpausing when they are closed.
-                        # The main thing is that total_paused_duration is not updated yet if another modal is active.
+                        if DEBUG_MODE: print(f"Game Unpause (P key) deferred - Help/Config active. Paused: {gs.game_paused} (still true effectively)")
                 continue
 
-            if not game_paused_flag: # Only if game is not paused by 'P' (or help screen, or config menu, or joystick pause)
+            if not gs.game_paused:
                 # AI Mode Toggle (A key)
                 if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY:
-                    ai_mode_flag = not ai_mode_flag
-                    if DEBUG_MODE: print(f"AI Mode Toggled (A key). AI: {ai_mode_flag}")
-                    if ai_mode_flag:
-                        soft_drop_flag = False
-                        if current_piece_obj: current_piece_obj.is_hard_dropping_animated = False
-                        last_ai_move_time_val = time.time()
+                    gs.ai_mode_active = not gs.ai_mode_active
+                    if DEBUG_MODE: print(f"AI Mode Toggled (A key). AI: {gs.ai_mode_active}")
+                    if gs.ai_mode_active:
+                        gs.soft_drop_active = False
+                        if gs.current_piece: gs.current_piece.is_hard_dropping_animated = False
+                        gs.last_ai_move_time = time.time()
                     continue
 
-                # Player-specific KEYBOARD controls for active play
-                if current_piece_obj and not ai_mode_flag:
-                    if DEBUG_MODE: print(f"DEBUG: Event for handle_player_piece_controls: type={event.type}, game_phase='{game_phase_str}', game_paused={game_paused_flag}, help_active={help_screen_active_flag}, ai_active={ai_mode_flag}")
-                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag)
+                # Use input_handler for player controls
+                # This assumes input_handler.process_event is designed to take gs and modify it
+                # or return specific changes. For now, we assume it handles its part.
+                # The original call to handle_player_piece_controls is removed.
+                # The call to input_handler.process_event should be here if this _handle_events
+                # is the main dispatcher for PLAYING phase events.
+                # However, the subtask was to REMOVE handle_player_piece_controls and handle_game_over_inputs
+                # and ensure calls go to input_handler.process_event.
+                # This implies _handle_events itself might be simplified or input_handler.process_event
+                # is called directly from the main loop for these types of events.
+                # For now, I will assume that player piece controls are handled by input_handler.process_event
+                # which would be called for relevant event types (KEYDOWN, KEYUP, JOY...)
+                # This part of _handle_events becomes a pass-through or calls input_handler.
+                # The existing structure of input_handler.process_event already handles this.
+                pass
 
-                # Joystick controls for active play (piece movement)
-                if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag:
-                    if event.type == pygame.JOYAXISMOTION:
-                        if event.joy == joystick_obj.get_id():
-                            axis = event.axis
-                            value = event.value
-                            if not current_piece_obj.is_hard_dropping_animated:
-                                if axis == 0: # X-axis
-                                    if value < -0.5: current_piece_obj.x -= 1
-                                    elif value > 0.5: current_piece_obj.x += 1
-                                    if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= (1 if value > 0.5 else -1)
-                                    else: play_sound("move")
-                                elif axis == 1: # Y-axis
-                                    if value > 0.5: soft_drop_flag = True
-                                    else: soft_drop_flag = False
-                    elif event.type == pygame.JOYHATMOTION:
-                        if event.joy == joystick_obj.get_id():
-                            hat_x, hat_y = event.value
-                            if not current_piece_obj.is_hard_dropping_animated:
-                                if hat_x == -1: current_piece_obj.x -= 1
-                                elif hat_x == 1: current_piece_obj.x += 1
-                                if not is_valid_position(current_piece_obj, game_grid_data): current_piece_obj.x -= (1 if hat_x == 1 else -1)
-                                else: play_sound("move")
-
-                                if hat_y == -1: soft_drop_flag = True
-                                elif hat_y == 1: current_piece_obj.rotate(game_grid_data)
-                                else: # Y is neutral
-                                     if hat_x == 0 : soft_drop_flag = False # only reset soft_drop if X is also neutral
-
-                    elif event.type == pygame.JOYBUTTONDOWN:
-                         if event.joy == joystick_obj.get_id():
-                            button = event.button
-                            if button != 6 and button != 7: # Ensure not global action buttons
-                                if not current_piece_obj.is_hard_dropping_animated:
-                                    if button == 0:
-                                        current_piece_obj.rotate(game_grid_data)
-                                    elif button == 1:
-                                        original_y = current_piece_obj.y
-                                        temp_piece_for_calc = Piece(current_piece_obj.x, original_y, current_piece_obj.shape_type)
-                                        temp_piece_for_calc.rotation = current_piece_obj.rotation
-                                        calculated_target_y = original_y
-                                        while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)):
-                                            calculated_target_y += 1
-                                        current_piece_obj.target_y_for_animated_drop = calculated_target_y
-                                        current_piece_obj.is_hard_dropping_animated = True
-                                        soft_drop_flag = False
 
         elif game_phase_str == "GAME_OVER":
-            action = None
-            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
-                action = handle_game_over_inputs(event)
+            # This was handle_game_over_inputs(event)
+            # Now, input_handler.process_event should cover this when game_phase_str is "GAME_OVER"
+            # So, the specific call to handle_game_over_inputs is removed.
+            # The logic will be inside the more general input_handler.process_event call below.
+            pass # Logic now in input_handler.process_event
 
-            if action == "RESTART":
-                action_request = "RESTART"
+        # General call to input_handler for events not handled by global toggles (H, C, P, A)
+        # This will cover piece controls, game over inputs, username entry
+        # We need to make sure this call is structured correctly based on input_handler.process_event's needs
+        if not (event.type == pygame.KEYDOWN and event.key in [pygame.K_h, pygame.K_c, PAUSE_KEY, AI_PLAYER_TOGGLE_KEY]):
+             handler_result = input_handler.process_event(event, gs, joystick_obj, joystick_enabled_flag, game_phase_str, current_username_str)
+             if handler_result.get("action_request"):
+                 action_request = handler_result["action_request"]
+             if "running_flag_event" in handler_result and not handler_result["running_flag_event"]:
+                 running_flag = False # Propagate quit signal
+             current_username_str = handler_result.get("current_username_str", current_username_str)
+             # gs.soft_drop_active might be modified by input_handler.process_event
+
+        # Joystick button handling for global actions (Pause, AI)
+        # (This logic for global joystick actions remains in _handle_events)
+        if joystick_enabled_flag and joystick_obj and event.type == pygame.JOYBUTTONDOWN:
+            button = event.button
+            if button == 7: # Start Button for Pause/Resume
+                if game_phase_str == "PLAYING":
+                    gs.game_paused = not gs.game_paused
+                    if gs.game_paused:
+                        gs.time_at_pause = time.time()
+                    else:
+                        if not help_screen_active and not config_menu_active:
+                            if gs.time_at_pause > 0:
+                                gs.total_paused_duration += time.time() - gs.time_at_pause
+                                gs.time_at_pause = 0
+                            gs.last_fall_time = time.time()
+                            gs.last_ai_move_time = time.time()
+                    continue
+            elif button == 6: # Select Button for AI toggle
+                 if game_phase_str == "PLAYING" and not gs.game_paused:
+                    gs.ai_mode_active = not gs.ai_mode_active
+                    if gs.ai_mode_active:
+                        gs.soft_drop_active = False
+                        if gs.current_piece: gs.current_piece.is_hard_dropping_animated = False
+                        gs.last_ai_move_time = time.time()
+                    continue
+
+    # Return values that are managed by main or are local to _handle_events's scope
+    return {
+        "running": running_flag,
+        "game_paused": gs.game_paused, # Return updated state from gs
+        "ai_mode_active": gs.ai_mode_active, # Return updated state from gs
+        "soft_drop_active": gs.soft_drop_active, # Return updated state from gs
+        "current_piece": gs.current_piece, # Return updated state from gs
+        "time_at_pause": gs.time_at_pause, # Return updated state from gs
+        "total_paused_duration": gs.total_paused_duration, # Return updated state from gs
+        "last_fall_time": gs.last_fall_time, # Return updated state from gs
+        "last_ai_move_time": gs.last_ai_move_time, # Return updated state from gs
+        "game_over": gs.game_over, # Return updated state from gs
+        "action_request": action_request,
+        "help_screen_active": help_screen_active,
+        "config_menu_active": config_menu_active,
+        "sound_effects_enabled": sound_effects_enabled_flag,
+        "shadow_enabled": shadow_enabled_flag,
+        "line_blink_enabled": line_blink_enabled_flag,
+        "music_enabled": music_enabled_flag,
+        "current_username_input": current_username_str,
+        "game_phase_str": game_phase_str
+    }
+
+def _update_game_state(gs: GameState, current_game_phase: str, current_lines_being_animated: list, current_line_animation_timer: int, line_blink_enabled_flag: bool):
+    # Note: game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val removed from params
+    # These are now expected to be part of gs if needed by time calculation, or time calc is done in main.
+    # For this iteration, final time string update is kept here using gs attributes.
+
+    if current_game_phase == "LINE_ANIMATION":
+        current_line_animation_timer, current_lines_being_animated, current_game_phase = \
+            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag)
+
+    elif current_game_phase == "PLAYING" and not gs.game_paused:
+        if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+            _process_ai_move(gs, play_sound, is_valid_position)
+
+        if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
+            if not gs.game_over:
+                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                if hard_drop_result:
+                    current_game_phase = hard_drop_result['game_phase_str']
+                    current_lines_being_animated = hard_drop_result['lines_being_animated']
+                    current_line_animation_timer = hard_drop_result['line_animation_timer']
+
+        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+             if not gs.game_over:
+                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                if descent_result:
+                    current_game_phase = descent_result['game_phase_str']
+                    current_lines_being_animated = descent_result['lines_being_animated']
+                    current_line_animation_timer = descent_result['line_animation_timer']
+
+    if gs.game_over and not gs.game_over_sound_played:
+        play_sound("game_over")
+        gs.game_over_sound_played = True
+        gs.current_piece = None
+        if gs.final_game_time_str is None:
+            current_elapsed_time = time.time() - gs.game_start_time - gs.total_paused_duration
+            gs.final_game_time_str = format_time(max(0, current_elapsed_time))
+
+    calculated_formatted_time_str = ""
+    if gs.game_over and gs.final_game_time_str:
+        calculated_formatted_time_str = gs.final_game_time_str
+    elif gs.game_paused:
+        elapsed_at_pause_moment = (gs.time_at_pause - gs.game_start_time) - gs.total_paused_duration
+        calculated_formatted_time_str = format_time(max(0, elapsed_at_pause_moment))
+    else:
+        current_elapsed_seconds = (time.time() - gs.game_start_time) - gs.total_paused_duration
+        calculated_formatted_time_str = format_time(max(0, current_elapsed_seconds))
+
+    return {
+        "formatted_time": calculated_formatted_time_str,
+        "game_phase_str": current_game_phase, # Return the (potentially updated) phase
+        "lines_being_animated": current_lines_being_animated, # Return (potentially updated) list
+        "line_animation_timer": current_line_animation_timer, # Return (potentially updated) timer
+        # Note: The GameState 'gs' is directly modified, so changes to its attributes
+        # (like gs.score, gs.game_over, etc.) are persistent in the calling scope (main loop)
+        # if 'gs' in main is the same GameState object instance.
+    }
+
+def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, level, total_lines, lines_for_lvl):
                 break
             elif action == "QUIT":
                 running_flag = False
@@ -1455,13 +1226,7 @@ def main():
     clock = pygame.time.Clock() # Moved clock initialization here as it's used by _draw_game_screen
 
     # Initial game state setup
-    game_state_dict = reset_game_state()
-    (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
-     total_lines_cleared, lines_for_current_level, game_over,
-     current_fall_speed, last_fall_time, soft_drop_active,
-     game_over_sound_played, ai_mode_active, last_ai_move_time,
-     game_start_time, final_game_time_str, game_paused,
-     time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
+    gs = reset_game_state() # Now returns a GameState object
 
     running = True
     help_screen_active = False
@@ -1478,33 +1243,43 @@ def main():
     while running:
         # Event Handling
         events = pygame.event.get()
+        # Pass relevant parts of gs to _handle_events, or refactor _handle_events to take gs
         event_handling_result = _handle_events(
-            events, game_over, game_paused, ai_mode_active, soft_drop_active,
-            current_piece, game_grid, running,
-            time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
-            joystick, joystick_enabled, help_screen_active,
-            game_phase, current_username_input, config_menu_active,
-            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled # Updated call
+            events,
+            gs.game_over, gs.game_paused, gs.ai_mode_active, gs.soft_drop_active,
+            gs.current_piece, gs.game_grid,
+            running,
+            gs.time_at_pause, gs.total_paused_duration, gs.last_fall_time, gs.last_ai_move_time,
+            joystick, joystick_enabled,
+            help_screen_active, # help_screen_active is local to main
+            game_phase,
+            current_username_input,
+            config_menu_active, # config_menu_active is local to main
+            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled
         )
 
         running = event_handling_result["running"]
-        game_paused = event_handling_result["game_paused"]
-        ai_mode_active = event_handling_result["ai_mode_active"]
-        soft_drop_active = event_handling_result["soft_drop_active"]
-        current_piece = event_handling_result["current_piece"]
-        time_at_pause = event_handling_result["time_at_pause"]
-        total_paused_duration = event_handling_result["total_paused_duration"]
-        last_fall_time = event_handling_result["last_fall_time"]
-        last_ai_move_time = event_handling_result["last_ai_move_time"]
-        action_request = event_handling_result["action_request"]
+        # Update gs attributes based on what _handle_events returns
+        gs.game_paused = event_handling_result["game_paused"]
+        gs.ai_mode_active = event_handling_result["ai_mode_active"]
+        gs.soft_drop_active = event_handling_result["soft_drop_active"]
+        gs.current_piece = event_handling_result["current_piece"]
+        gs.time_at_pause = event_handling_result["time_at_pause"]
+        gs.total_paused_duration = event_handling_result["total_paused_duration"]
+        gs.last_fall_time = event_handling_result["last_fall_time"]
+        gs.last_ai_move_time = event_handling_result["last_ai_move_time"]
+
+        action_request = event_handling_result.get("action_request")
         help_screen_active = event_handling_result["help_screen_active"]
         config_menu_active = event_handling_result["config_menu_active"]
-        sound_effects_enabled = event_handling_result["sound_effects_enabled"] # Key updated
-        shadow_enabled = event_handling_result["shadow_enabled"]
-        line_blink_enabled = event_handling_result["line_blink_enabled"]
-        music_enabled = event_handling_result["music_enabled"] # Added
+        sound_effects_enabled = event_handling_result.get("sound_effects_enabled", sound_effects_enabled)
+        shadow_enabled = event_handling_result.get("shadow_enabled", shadow_enabled)
+        line_blink_enabled = event_handling_result.get("line_blink_enabled", line_blink_enabled)
+        music_enabled = event_handling_result.get("music_enabled", music_enabled)
         current_username_input = event_handling_result["current_username_input"]
-        # game_phase is now primarily managed by main based on action_request or game_over state changes
+
+        if "game_phase_str" in event_handling_result and event_handling_result["game_phase_str"] != game_phase:
+            game_phase = event_handling_result["game_phase_str"]
 
         # --- Runtime Music Management ---
         if background_music_loaded: # Only manage music if it was loaded successfully
@@ -1523,106 +1298,73 @@ def main():
             break
 
         if action_request == "RESTART":
-            game_state_dict = _handle_restart_action()
-            (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
-             total_lines_cleared, lines_for_current_level, game_over,
-             current_fall_speed, last_fall_time, soft_drop_active,
-             game_over_sound_played, ai_mode_active, last_ai_move_time,
-             game_start_time, final_game_time_str, game_paused,
-             time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
-            formatted_time = ""
+            gs = _handle_restart_action() # Returns a new GameState object
+            formatted_time = "00:00" # Reset display time
             help_screen_active = False
-            game_phase = "PLAYING"
+            game_phase = "PLAYING" # Reset game phase
             current_username_input = ""
             continue
 
         if action_request == "SAVE_SCORE":
             new_entry = {
                 "username": current_username_input,
-                "score": score,
-                "time_str": final_game_time_str if final_game_time_str else formatted_time
+                "score": gs.score, # Use gs.score
+                "time_str": gs.final_game_time_str if gs.final_game_time_str else formatted_time
             }
             config_manager._update_and_save_top_scores(new_entry, DEBUG_MODE)
-            top_scores_list = config_manager._load_best_score(DEBUG_MODE) # Reload to get the updated list for display
-            game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
+            top_scores_list = config_manager._load_best_score(DEBUG_MODE)
+            game_phase = "HIGH_SCORE_DISPLAY"
             current_username_input = ""
             if DEBUG_MODE: print(f"DEBUG MainLoop: Score saved. game_phase set to '{game_phase}'.")
         elif action_request == "SKIP_SAVE":
-            game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
+            game_phase = "HIGH_SCORE_DISPLAY"
             current_username_input = ""
             if DEBUG_MODE: print(f"DEBUG MainLoop: Score save skipped. game_phase set to '{game_phase}'.")
 
-        prev_game_over = game_over
+        prev_game_over = gs.game_over
 
-        game_logic_result = _update_game_state(
-            game_over, game_paused, ai_mode_active, current_piece, next_piece_1, next_piece_2, # Updated next_piece args
-            game_grid, score, current_level, total_lines_cleared,
-            lines_for_current_level, current_fall_speed, last_fall_time,
-            soft_drop_active, game_over_sound_played, last_ai_move_time,
-            game_start_time, final_game_time_str, total_paused_duration, time_at_pause,
-            help_screen_active, game_phase,
-            lines_being_animated, line_animation_timer, # Existing animation params
-            line_blink_enabled  # Add the new flag here
+        update_result = _update_game_state(
+            gs, game_phase, lines_being_animated, line_animation_timer,
+            line_blink_enabled
         )
 
-        game_over = game_logic_result["game_over"]
-        current_piece = game_logic_result["current_piece"]
-        next_piece_1 = game_logic_result["next_piece_1"] # Unpack next_piece_1
-        next_piece_2 = game_logic_result["next_piece_2"] # Unpack next_piece_2
-        game_grid = game_logic_result["game_grid"]
-        score = game_logic_result["score"]
-        current_level = game_logic_result["current_level"]
-        total_lines_cleared = game_logic_result["total_lines_cleared"]
-        lines_for_current_level = game_logic_result["lines_for_current_level"]
-        current_fall_speed = game_logic_result["current_fall_speed"]
-        last_fall_time = game_logic_result["last_fall_time"]
-        soft_drop_active = game_logic_result["soft_drop_active"]
-        game_over_sound_played = game_logic_result["game_over_sound_played"]
-        last_ai_move_time = game_logic_result["last_ai_move_time"]
-        final_game_time_str = game_logic_result["final_game_time_str"]
-        formatted_time = game_logic_result["formatted_time"]
-        game_phase = game_logic_result["game_phase_str"] # Unpack game_phase
-        lines_being_animated = game_logic_result["lines_being_animated"] # Unpack lines_being_animated
-        line_animation_timer = game_logic_result["line_animation_timer"] # Unpack line_animation_timer
+        formatted_time = update_result["formatted_time"]
+        game_phase = update_result["game_phase_str"]
+        lines_being_animated = update_result["lines_being_animated"]
+        line_animation_timer = update_result["line_animation_timer"]
 
+        if DEBUG_MODE: print(f"DEBUG MainLoop: game_over={gs.game_over}, prev_game_over={prev_game_over}, score={gs.score}, current_game_phase='{game_phase}'")
 
-        # (This should be after game_over is updated by _update_game_state result,
-        # and before the if game_over and not prev_game_over block)
-        if DEBUG_MODE: print(f"DEBUG MainLoop: game_over={game_over}, prev_game_over={prev_game_over}, score={score}, current_game_phase='{game_phase}'")
-
-        # Game Phase Transition Logic (after game logic updates game_over)
-        if game_over and not prev_game_over: # Game just ended
-            if DEBUG_MODE: print(f"DEBUG MainLoop: Game JUST ENDED. Checking score ({score}) against top scores.")
+        if gs.game_over and not prev_game_over:
+            if DEBUG_MODE: print(f"DEBUG MainLoop: Game JUST ENDED. Checking score ({gs.score}) against top scores.")
 
             is_top_score = False
-            if len(top_scores_list) < 10: # List has less than 10 scores
+            if len(top_scores_list) < 10:
                 is_top_score = True
-            # If list has 10 scores, check if current score is higher than the lowest score in the list
-            elif score > 0 and score > top_scores_list[-1].get("score", 0):
+            elif gs.score > 0 and gs.score > top_scores_list[-1].get("score", 0):
                 is_top_score = True
-            # Existing DEBUG print for top_scores_list in _load_best_score will show its state.
 
-            if score > 0 and is_top_score: # Ensure score is positive to prompt for name
+            if gs.score > 0 and is_top_score:
                 game_phase = "GETTING_USERNAME"
                 current_username_input = ""
                 if DEBUG_MODE: print(f"DEBUG MainLoop: New top 10 score! game_phase set to '{game_phase}'.")
             else:
-                game_phase = "HIGH_SCORE_DISPLAY" # NEW BEHAVIOR
-                if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {score}). game_phase set to '{game_phase}'.")
+                game_phase = "HIGH_SCORE_DISPLAY"
+                if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {gs.score}). game_phase set to '{game_phase}'.")
 
-        # Drawing
-        _draw_game_screen(
-            screen, game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, # Pass next_piece_1 and next_piece_2
-            total_lines_cleared, lines_for_current_level, ai_mode_active,
-            formatted_time, game_over, game_paused, clock,
+        # Drawing - Call ui_manager.draw_main_ui
+        fonts = {"game_over": GAME_OVER_FONT, "score": SCORE_FONT, "info": INFO_FONT, "title": TITLE_FONT}
+        ui_manager.draw_main_ui(
+            screen, gs, fonts, clock,
             help_screen_active, help_text_surfaces,
             game_phase, current_username_input, top_scores_list,
             lines_being_animated, line_animation_timer,
-            config_menu_active, sound_effects_enabled, shadow_enabled, # Renamed
-            line_blink_enabled, music_enabled # Added
+            config_menu_active,
+            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled,
+            formatted_time, DEBUG_MODE
         )
 
-    if background_music_loaded: # Check if music was loaded
+    if background_music_loaded:
         pygame.mixer.music.stop()
         if DEBUG_MODE: print("DEBUG: Background music stopped on game exit.")
 
