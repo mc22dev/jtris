@@ -94,9 +94,10 @@ SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
 SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
 SOUND_DIR = "sounds"
-sound_enabled = True # Initialize sound_enabled globally at module level
-shadow_enabled = True # Default initial value before config is loaded
-line_blink_enabled = True # Default initial value before config is loaded
+sound_effects_enabled = True # Renamed from sound_enabled
+shadow_enabled = True
+line_blink_enabled = True
+music_enabled = True         # Added
 
 def load_sound(filename):
     path = os.path.join(SOUND_DIR, filename)
@@ -105,8 +106,8 @@ def load_sound(filename):
     except pygame.error as e: print(f"Error loading sound {filename}: {e}"); return None
 
 def play_sound(sound_name):
-    global sound_enabled # Access the global sound_enabled state
-    if not sound_enabled:
+    global sound_effects_enabled # Use new global name
+    if not sound_effects_enabled:
         return
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
 
@@ -811,52 +812,71 @@ def _unpack_game_state(game_state_dict):
 
 def load_config():
     filename = "config.json"
-    default_config = {"sound_enabled": True, "shadow_enabled": True, "line_blink_enabled": True}
+    default_config = {
+        "sound_effects_enabled": True,
+        "shadow_enabled": True,
+        "line_blink_enabled": True,
+        "music_enabled": True
+    }
 
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
             if not isinstance(data, dict): # Ensure data is a dictionary before using .get()
                 if DEBUG_MODE: print(f"Warning: {filename} content is not a dictionary. Using defaults.")
-                return default_config.copy() # Return a copy of default_config
+                return default_config.copy()
 
             final_config = {}
-            loaded_sound = data.get("sound_enabled")
-            loaded_shadow = data.get("shadow_enabled")
-            loaded_line_blink = data.get("line_blink_enabled")
 
-            if isinstance(loaded_sound, bool):
-                final_config["sound_enabled"] = loaded_sound
+            # Handle sound_effects_enabled (with backward compatibility for 'sound_enabled')
+            loaded_sound_fx = data.get("sound_effects_enabled")
+            if isinstance(loaded_sound_fx, bool):
+                final_config["sound_effects_enabled"] = loaded_sound_fx
             else:
-                final_config["sound_enabled"] = default_config["sound_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'sound_enabled' missing/invalid in {filename}. Using default.")
+                old_sound_enabled = data.get("sound_enabled") # Check old key
+                if isinstance(old_sound_enabled, bool):
+                    final_config["sound_effects_enabled"] = old_sound_enabled
+                    if DEBUG_MODE: print(f"DEBUG: Migrated 'sound_enabled' to 'sound_effects_enabled' from {filename}.")
+                else:
+                    final_config["sound_effects_enabled"] = default_config["sound_effects_enabled"]
+                    if DEBUG_MODE: print(f"Warning: 'sound_effects_enabled' (and old 'sound_enabled') missing/invalid in {filename}. Using default.")
 
+            # Handle shadow_enabled
+            loaded_shadow = data.get("shadow_enabled")
             if isinstance(loaded_shadow, bool):
                 final_config["shadow_enabled"] = loaded_shadow
             else:
                 final_config["shadow_enabled"] = default_config["shadow_enabled"]
                 if DEBUG_MODE: print(f"Warning: 'shadow_enabled' missing/invalid in {filename}. Using default.")
 
+            # Handle line_blink_enabled
+            loaded_line_blink = data.get("line_blink_enabled")
             if isinstance(loaded_line_blink, bool):
                 final_config["line_blink_enabled"] = loaded_line_blink
             else:
                 final_config["line_blink_enabled"] = default_config["line_blink_enabled"]
-                if DEBUG_MODE: # DEBUG_MODE check for the print statement
-                    # This specific print might only be useful if data *was* a dict but key was bad/missing.
-                    print(f"Warning: 'line_blink_enabled' missing/invalid in {filename} (or file was not a dict). Using default.")
+                if DEBUG_MODE: print(f"Warning: 'line_blink_enabled' missing/invalid in {filename}. Using default.")
+
+            # Handle new music_enabled key
+            loaded_music = data.get("music_enabled")
+            if isinstance(loaded_music, bool):
+                final_config["music_enabled"] = loaded_music
+            else:
+                final_config["music_enabled"] = default_config["music_enabled"]
+                if DEBUG_MODE: print(f"Warning: 'music_enabled' missing/invalid in {filename}. Using default.")
 
             if DEBUG_MODE: print(f"Config processed from {filename}. Final values: {final_config}")
             return final_config
 
     except FileNotFoundError:
         if DEBUG_MODE: print(f"Info: {filename} not found. Using default config: {default_config}")
-        return default_config.copy() # Return a copy
+        return default_config.copy()
     except json.JSONDecodeError:
         if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults: {default_config}")
-        return default_config.copy() # Return a copy
+        return default_config.copy()
     except Exception as e:
         if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults: {default_config}")
-        return default_config.copy() # Return a copy
+        return default_config.copy()
 
 def save_config(config_data):
     filename = "config.json"
@@ -978,7 +998,7 @@ def _load_best_score():
 #     except Exception as e:
 #         print(f"Error saving best score to {filename}: {e}")
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Added line_blink_enabled_flag
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag):
     action_request = None
     # current_username_str is a string, reassignments will create new strings. Caller (main) will update its copy.
 
@@ -1051,19 +1071,42 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         # Config Menu Active Handling (takes precedence over game phases if active, but after help)
         if config_menu_active_flag:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_s:
-                    sound_enabled_flag = not sound_enabled_flag
-                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
-                    if DEBUG_MODE: print(f"Sound setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
-                    # Potentially play a sound here to indicate change, if sound is now ON
-                elif event.key == pygame.K_d: # Toggle shadow
+                if event.key == pygame.K_s: # Sound Effects Toggle
+                    sound_effects_enabled_flag = not sound_effects_enabled_flag
+                    save_config({
+                        "sound_effects_enabled": sound_effects_enabled_flag,
+                        "shadow_enabled": shadow_enabled_flag,
+                        "line_blink_enabled": line_blink_enabled_flag,
+                        "music_enabled": music_enabled_flag
+                    })
+                    if DEBUG_MODE: print(f"Sound Effects setting toggled. New state: {sound_effects_enabled_flag}. Config saved.")
+                elif event.key == pygame.K_m: # Music Toggle
+                    music_enabled_flag = not music_enabled_flag
+                    save_config({
+                        "sound_effects_enabled": sound_effects_enabled_flag,
+                        "shadow_enabled": shadow_enabled_flag,
+                        "line_blink_enabled": line_blink_enabled_flag,
+                        "music_enabled": music_enabled_flag
+                    })
+                    if DEBUG_MODE: print(f"Music setting toggled. New state: {music_enabled_flag}. Config saved.")
+                elif event.key == pygame.K_d: # Shadow Toggle
                     shadow_enabled_flag = not shadow_enabled_flag
-                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
-                    if DEBUG_MODE: print(f"Shadow setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
-                elif event.key == pygame.K_b: # Toggle line blink
+                    save_config({
+                        "sound_effects_enabled": sound_effects_enabled_flag,
+                        "shadow_enabled": shadow_enabled_flag,
+                        "line_blink_enabled": line_blink_enabled_flag,
+                        "music_enabled": music_enabled_flag
+                    })
+                    if DEBUG_MODE: print(f"Shadow setting toggled. New state: {shadow_enabled_flag}. Config saved.")
+                elif event.key == pygame.K_b: # Line Blink Toggle
                     line_blink_enabled_flag = not line_blink_enabled_flag
-                    save_config({"sound_enabled": sound_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag})
-                    if DEBUG_MODE: print(f"Line blink setting toggled. Called save_config with sound: {sound_enabled_flag}, shadow: {shadow_enabled_flag}, blink: {line_blink_enabled_flag}")
+                    save_config({
+                        "sound_effects_enabled": sound_effects_enabled_flag,
+                        "shadow_enabled": shadow_enabled_flag,
+                        "line_blink_enabled": line_blink_enabled_flag,
+                        "music_enabled": music_enabled_flag
+                    })
+                    if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
@@ -1258,9 +1301,10 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "action_request": action_request,
         "help_screen_active": help_screen_active_flag,
         "config_menu_active": config_menu_active_flag,
-        "sound_enabled": sound_enabled_flag,
+        "sound_effects_enabled": sound_effects_enabled_flag, # Renamed key
         "shadow_enabled": shadow_enabled_flag,
-        "line_blink_enabled": line_blink_enabled_flag, # Added
+        "line_blink_enabled": line_blink_enabled_flag,
+        "music_enabled": music_enabled_flag, # Added key
         "current_username_input": current_username_str,
         "game_phase_str": game_phase_str
     }
@@ -1604,7 +1648,7 @@ def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
     instruction_rect = instruction_surf.get_rect(center=(SCREEN_WIDTH // 2, instruction_y))
     screen_surface.blit(instruction_surf, instruction_rect)
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag): # Changed best_score_data_dict to top_scores_list
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag): # Signature updated
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
@@ -1712,33 +1756,40 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         # Config Menu Title
         # Assuming GAME_OVER_FONT and INFO_FONT are loaded globally and available
         title_text_surf = GAME_OVER_FONT.render("CONFIGURATION MENU", True, WHITE)
-        title_rect = title_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+        title_rect = title_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 140)) # Adjusted Y
         screen_surface.blit(title_text_surf, title_rect)
 
-        # Sound Option Text
-        sound_status_str = "ON" if sound_enabled_flag else "OFF"
-        sound_option_text_str = f"Sound: {sound_status_str} (Press S to toggle)"
-        sound_option_surf = INFO_FONT.render(sound_option_text_str, True, WHITE)
-        sound_option_rect = sound_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 20)) # Adjusted Y
-        screen_surface.blit(sound_option_surf, sound_option_rect)
+        # Sound FX Option Text
+        sound_fx_status_str = "ON" if sound_effects_enabled_flag else "OFF"
+        sound_fx_option_text_str = f"Sound FX: {sound_fx_status_str} (Press S to toggle)"
+        sound_fx_option_surf = INFO_FONT.render(sound_fx_option_text_str, True, WHITE)
+        sound_fx_option_rect = sound_fx_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 80)) # Adjusted Y
+        screen_surface.blit(sound_fx_option_surf, sound_fx_option_rect)
+
+        # Music Option Text (New)
+        music_status_str = "ON" if music_enabled_flag else "OFF"
+        music_option_text_str = f"Music: {music_status_str} (Press M to toggle)"
+        music_option_surf = INFO_FONT.render(music_option_text_str, True, WHITE)
+        music_option_rect = music_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 40)) # Adjusted Y
+        screen_surface.blit(music_option_surf, music_option_rect)
 
         # Shadow Option Text
         shadow_status_str = "ON" if shadow_enabled_flag else "OFF"
         shadow_option_text_str = f"Shadow: {shadow_status_str} (Press D to toggle)"
         shadow_option_surf = INFO_FONT.render(shadow_option_text_str, True, WHITE)
-        shadow_option_rect = shadow_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20)) # Adjusted Y
+        shadow_option_rect = shadow_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 0)) # Adjusted Y
         screen_surface.blit(shadow_option_surf, shadow_option_rect)
 
         # Line Blink Option Text
         line_blink_status_str = "ON" if line_blink_enabled_flag else "OFF"
         line_blink_option_text_str = f"Line Blink: {line_blink_status_str} (Press B to toggle)"
         line_blink_option_surf = INFO_FONT.render(line_blink_option_text_str, True, WHITE)
-        line_blink_option_rect = line_blink_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60)) # Adjusted Y
+        line_blink_option_rect = line_blink_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40)) # Adjusted Y
         screen_surface.blit(line_blink_option_surf, line_blink_option_rect)
 
         # Close Menu Hint
         close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
-        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 140)) # Adjusted Y further down
+        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)) # Adjusted Y
         screen_surface.blit(close_hint_surf, close_hint_rect)
     elif game_phase_str == "HIGH_SCORE_DISPLAY":
         fonts_for_scores = {
@@ -1765,24 +1816,22 @@ def main():
         print("DEBUG MODE ENABLED")
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
-    global sound_enabled # Ensure main uses and can modify the global sound_enabled
-    global shadow_enabled # Ensure main uses and can modify the global shadow_enabled
-    global line_blink_enabled # Add this
+    global sound_effects_enabled # Renamed
+    global shadow_enabled
+    global line_blink_enabled
+    global music_enabled         # Added
 
     # Load configuration
-    loaded_config = load_config()
-    # load_config ensures that all keys are present and are booleans.
-    # Using .get() as an additional safety for direct access.
-    if isinstance(loaded_config, dict):
-        sound_enabled = loaded_config.get("sound_enabled", True)
-        shadow_enabled = loaded_config.get("shadow_enabled", True)
-        line_blink_enabled = loaded_config.get("line_blink_enabled", True) # Add this line
-    else:
-        # This case should be rare if load_config is robust as implemented
-        if DEBUG_MODE: print("Warning: load_config did not return a dictionary. Using all default settings.")
-        sound_enabled = True
-        shadow_enabled = True
-        line_blink_enabled = True # Add this line for the fallback
+    loaded_config = load_config() # This now returns a dict with all 4 keys or defaults
+
+    # Initialize module globals from the fully populated loaded_config
+    # Fallback to existing global values (which are module-level defaults) if a key is somehow missing,
+    # though load_config is designed to always provide all keys with their defaults.
+    sound_effects_enabled = loaded_config.get("sound_effects_enabled", sound_effects_enabled)
+    shadow_enabled = loaded_config.get("shadow_enabled", shadow_enabled)
+    line_blink_enabled = loaded_config.get("line_blink_enabled", line_blink_enabled)
+    music_enabled = loaded_config.get("music_enabled", music_enabled)
+    # The isinstance check for loaded_config itself is already handled robustly by load_config returning a default dict.
 
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
@@ -1790,13 +1839,42 @@ def main():
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
     top_scores_list = _load_best_score() # Renamed variable
 
+    # --- Background Music Loading ---
+    background_music_file = "background_01.mp3"
+    background_music_loaded = False
+    if os.path.isdir(SOUND_DIR): # Only attempt to load if sound directory exists
+        try:
+            music_path = os.path.join(SOUND_DIR, background_music_file)
+            if not os.path.exists(music_path):
+                if DEBUG_MODE: print(f"DEBUG: Background music file not found at {music_path}")
+                # background_music_loaded remains False
+            else:
+                pygame.mixer.music.load(music_path)
+                if DEBUG_MODE: print(f"DEBUG: Background music loaded from {music_path}")
+                background_music_loaded = True
+        except pygame.error as e:
+            if DEBUG_MODE: print(f"DEBUG: Error loading background music: {e}")
+            # background_music_loaded remains False
+    else:
+        if DEBUG_MODE: print(f"DEBUG: Sound directory '{SOUND_DIR}' not found. Skipping music and sound effects loading.")
+        # sound_enabled might be set to False here if desired, or handled by individual play calls
 
-    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
+    # --- Sound Effects Loading ---
+    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.") # This check is somewhat redundant if already done for music, but kept for clarity for SFX
     else:
         SOUND_EFFECTS["move"]=load_sound("move.wav"); SOUND_EFFECTS["rotate"]=load_sound("rotate.wav")
         SOUND_EFFECTS["drop"]=load_sound("drop.wav"); SOUND_EFFECTS["line_clear"]=load_sound("line_clear.wav")
         SOUND_EFFECTS["tetris_clear"]=load_sound("tetris_clear.wav"); SOUND_EFFECTS["level_up"]=load_sound("level_up.wav")
         SOUND_EFFECTS["game_over"]=load_sound("game_over.wav")
+
+    # --- Initial Music Playback ---
+    if background_music_loaded and music_enabled: # Changed sound_enabled to music_enabled
+        pygame.mixer.music.set_volume(0.5) # Set desired volume (0.0 to 1.0)
+        pygame.mixer.music.play(loops=-1) # Start playing in a loop
+        if DEBUG_MODE: print("DEBUG: Background music started playing (music_enabled is True).")
+    elif background_music_loaded and not music_enabled: # Changed sound_enabled to music_enabled
+        pygame.mixer.music.set_volume(0.5) # Set volume anyway, so it's ready
+        if DEBUG_MODE: print("DEBUG: Background music loaded, but music_enabled is initially False. Music not started.")
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption(SCREEN_TITLE)
@@ -1842,7 +1920,8 @@ def main():
             current_piece, game_grid, running,
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
             joystick, joystick_enabled, help_screen_active,
-            game_phase, current_username_input, config_menu_active, sound_enabled, shadow_enabled, line_blink_enabled # Pass current global states
+            game_phase, current_username_input, config_menu_active,
+            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled # Updated call
         )
 
         running = event_handling_result["running"]
@@ -1856,12 +1935,26 @@ def main():
         last_ai_move_time = event_handling_result["last_ai_move_time"]
         action_request = event_handling_result["action_request"]
         help_screen_active = event_handling_result["help_screen_active"]
-        config_menu_active = event_handling_result["config_menu_active"] # Update local var from return
-        sound_enabled = event_handling_result["sound_enabled"]           # Update global var from return
-        shadow_enabled = event_handling_result["shadow_enabled"]         # Update global var from return
-        line_blink_enabled = event_handling_result["line_blink_enabled"] # Update global var from return
+        config_menu_active = event_handling_result["config_menu_active"]
+        sound_effects_enabled = event_handling_result["sound_effects_enabled"] # Key updated
+        shadow_enabled = event_handling_result["shadow_enabled"]
+        line_blink_enabled = event_handling_result["line_blink_enabled"]
+        music_enabled = event_handling_result["music_enabled"] # Added
         current_username_input = event_handling_result["current_username_input"]
         # game_phase is now primarily managed by main based on action_request or game_over state changes
+
+        # --- Runtime Music Management ---
+        if background_music_loaded: # Only manage music if it was loaded successfully
+            if music_enabled: # Use the dedicated music_enabled global
+                if not pygame.mixer.music.get_busy(): # If not currently playing
+                    pygame.mixer.music.unpause() # Try to unpause first
+                    if not pygame.mixer.music.get_busy(): # If still not playing
+                        pygame.mixer.music.play(loops=-1) # Play from beginning
+                    if DEBUG_MODE: print("DEBUG: music_enabled is True. Ensured music is playing/unpaused.")
+            else: # music_enabled is False
+                if pygame.mixer.music.get_busy():
+                    pygame.mixer.music.pause() # Pause the music
+                    if DEBUG_MODE: print("DEBUG: music_enabled is False. Music paused.")
 
         if not running:
             break
@@ -1960,11 +2053,16 @@ def main():
             total_lines_cleared, lines_for_current_level, ai_mode_active,
             formatted_time, game_over, game_paused, clock,
             help_screen_active, help_text_surfaces,
-            game_phase, current_username_input, top_scores_list, # Pass top_scores_list
+            game_phase, current_username_input, top_scores_list,
             lines_being_animated, line_animation_timer,
-            config_menu_active, sound_enabled, shadow_enabled,
-            line_blink_enabled
+            config_menu_active, sound_effects_enabled, shadow_enabled, # Renamed
+            line_blink_enabled, music_enabled # Added
         )
+
+    if background_music_loaded: # Check if music was loaded
+        pygame.mixer.music.stop()
+        if DEBUG_MODE: print("DEBUG: Background music stopped on game exit.")
+
     pygame.mixer.quit()
     pygame.font.quit()
     pygame.quit()
