@@ -21,6 +21,7 @@ from .constants import (
 )
 from .piece import Piece # Import Piece from its new location
 from . import ai_player # Import the new AI player module
+from . import config_manager # Import config_manager
 
 # Initialize Pygame
 pygame.init()
@@ -334,33 +335,28 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func):
             gs.soft_drop_active = False
         else:
             if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
-            gs.game_over = True
+            gs.game_over = True # Make sure gs.game_over is set
         gs.last_ai_move_time = time.time()
 
 def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
     # Animated Hard Drop Logic
-    # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
-    # gs.last_fall_time, gs.soft_drop_active, gs.game_over
-    # Returns: dict for game phase transition if line clear, else None
-    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
-    # LINE_ANIMATION_DURATION, GRID_WIDTH
     gs.current_piece.y += 1
     if gs.current_piece.y >= gs.current_piece.target_y_for_animated_drop:
         gs.current_piece.y = gs.current_piece.target_y_for_animated_drop
         gs.current_piece.is_hard_dropping_animated = False
-        add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+        add_to_grid(gs.current_piece, gs.game_grid)
 
         cleared_row_indices = get_full_lines(gs.game_grid)
         if cleared_row_indices:
             if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
             elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
-            gs.current_piece = None # Piece locked, wait for animation
+            gs.current_piece = None
             return {
                 'game_phase_str': "LINE_ANIMATION",
                 'lines_being_animated': cleared_row_indices,
                 'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
             }
-        else: # No lines cleared
+        else:
             gs.current_piece = gs.next_piece_1
             if gs.current_piece:
                 gs.current_piece.x = GRID_WIDTH // 2
@@ -384,11 +380,6 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
 
 def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
     # Automatic Piece Descent
-    # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
-    # gs.last_fall_time, gs.soft_drop_active, gs.game_over
-    # Returns: dict for game phase transition if line clear, else None
-    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
-    # LINE_ANIMATION_DURATION, GRID_WIDTH
     fall_interval = gs.current_fall_speed
     if gs.soft_drop_active: fall_interval = min(gs.current_fall_speed, 0.05)
 
@@ -396,19 +387,19 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
         gs.current_piece.y += 1
         if not is_valid_position_func(gs.current_piece, gs.game_grid):
             gs.current_piece.y -= 1
-            add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+            add_to_grid(gs.current_piece, gs.game_grid)
 
             cleared_row_indices = get_full_lines(gs.game_grid)
             if cleared_row_indices:
                 if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
                 elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
-                gs.current_piece = None # Piece locked, wait for animation
+                gs.current_piece = None
                 return {
                     'game_phase_str': "LINE_ANIMATION",
                     'lines_being_animated': cleared_row_indices,
                     'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
                 }
-            else: # No lines cleared
+            else:
                 gs.current_piece = gs.next_piece_1
                 if gs.current_piece:
                     gs.current_piece.x = GRID_WIDTH // 2
@@ -428,18 +419,14 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
                     gs.current_piece = None
             gs.last_fall_time = time.time()
             gs.soft_drop_active = False
-        else: # Piece still falling
+        else:
             gs.last_fall_time = time.time()
     return None
 
 def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag):
     # Line Animation Phase
-    # Modifies: gs (grid, score, level, etc.), gs.current_piece, gs.next_piece_1, gs.next_piece_2, gs.game_over
-    # Returns: updated line_animation_timer_val, lines_being_animated_list, new_game_phase_str
-    # Dependencies: _finalize_line_clear, calculate_fall_speed, add_garbage_blocks, is_valid_position_func, Piece
-
     line_animation_timer_val -= 1
-    new_game_phase_str = "LINE_ANIMATION" # Default to staying in this phase
+    new_game_phase_str = "LINE_ANIMATION"
 
     if line_animation_timer_val <= 0:
         finalize_result = _finalize_line_clear(
@@ -454,7 +441,8 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
 
         if finalize_result["leveled_up"]:
             gs.current_fall_speed = calculate_fall_speed(gs.current_level)
-            if add_garbage_blocks(gs.game_grid, gs.current_level): # add_garbage_blocks uses global Piece
+            # add_garbage_blocks calls Piece constructor internally, needs funcs
+            if add_garbage_blocks(gs.game_grid, gs.current_level):
                 gs.game_over = True
                 gs.current_piece = None
 
@@ -640,73 +628,7 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
-def load_config():
-    filename = "config.json"
-    default_config = {
-        "sound_effects_enabled": True,
-        "shadow_enabled": True,
-        "line_blink_enabled": True,
-        "music_enabled": True
-    }
-
-    try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-            if not isinstance(data, dict): # Ensure data is a dictionary before using .get()
-                if DEBUG_MODE: print(f"Warning: {filename} content is not a dictionary. Using defaults.")
-                return default_config.copy()
-
-            final_config = {}
-
-            # Handle sound_effects_enabled (with backward compatibility for 'sound_enabled')
-            loaded_sound_fx = data.get("sound_effects_enabled")
-            if isinstance(loaded_sound_fx, bool):
-                final_config["sound_effects_enabled"] = loaded_sound_fx
-            else:
-                old_sound_enabled = data.get("sound_enabled") # Check old key
-                if isinstance(old_sound_enabled, bool):
-                    final_config["sound_effects_enabled"] = old_sound_enabled
-                    if DEBUG_MODE: print(f"DEBUG: Migrated 'sound_enabled' to 'sound_effects_enabled' from {filename}.")
-                else:
-                    final_config["sound_effects_enabled"] = default_config["sound_effects_enabled"]
-                    if DEBUG_MODE: print(f"Warning: 'sound_effects_enabled' (and old 'sound_enabled') missing/invalid in {filename}. Using default.")
-
-            # Handle shadow_enabled
-            loaded_shadow = data.get("shadow_enabled")
-            if isinstance(loaded_shadow, bool):
-                final_config["shadow_enabled"] = loaded_shadow
-            else:
-                final_config["shadow_enabled"] = default_config["shadow_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'shadow_enabled' missing/invalid in {filename}. Using default.")
-
-            # Handle line_blink_enabled
-            loaded_line_blink = data.get("line_blink_enabled")
-            if isinstance(loaded_line_blink, bool):
-                final_config["line_blink_enabled"] = loaded_line_blink
-            else:
-                final_config["line_blink_enabled"] = default_config["line_blink_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'line_blink_enabled' missing/invalid in {filename}. Using default.")
-
-            # Handle new music_enabled key
-            loaded_music = data.get("music_enabled")
-            if isinstance(loaded_music, bool):
-                final_config["music_enabled"] = loaded_music
-            else:
-                final_config["music_enabled"] = default_config["music_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'music_enabled' missing/invalid in {filename}. Using default.")
-
-            if DEBUG_MODE: print(f"Config processed from {filename}. Final values: {final_config}")
-            return final_config
-
-    except FileNotFoundError:
-        if DEBUG_MODE: print(f"Info: {filename} not found. Using default config: {default_config}")
-        return default_config.copy()
-    except json.JSONDecodeError:
-        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults: {default_config}")
-        return default_config.copy()
-    except Exception as e:
-        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults: {default_config}")
-        return default_config.copy()
+# Local load_config removed, config_manager.load_config will be used.
 
 def save_config(config_data):
     filename = "config.json"
@@ -1566,7 +1488,7 @@ def main():
     global music_enabled         # Added
 
     # Load configuration
-    loaded_config = load_config() # This now returns a dict with all 4 keys or defaults
+    loaded_config = config_manager.load_config(DEBUG_MODE) # Call via config_manager
 
     # Initialize module globals from the fully populated loaded_config
     # Fallback to existing global values (which are module-level defaults) if a key is somehow missing,
