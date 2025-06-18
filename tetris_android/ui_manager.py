@@ -1,9 +1,9 @@
 import pygame
 import time
 from .game_state import GameState
-from .piece import Piece # Changed from .tetris to .piece
-from .tetris import is_valid_position # Piece removed from this import
-from . import constants # Import the new constants module
+from .piece import Piece
+from .core_utils import get_shadow_position_y # Import get_shadow_position_y instead of is_valid_position
+from . import constants
 
 # --- Constants are now in constants.py ---
 # Colors, Grid dimensions, UI layout, Font sizes, Animation duration
@@ -38,12 +38,7 @@ def _draw_current_piece_on_grid(screen_surface, piece):
             if r_idx >= 0:
                 pygame.draw.rect(screen_surface, piece.color, (constants.GRID_OFFSET_X + c_idx * constants.BLOCK_SIZE, constants.GRID_OFFSET_Y + r_idx * constants.BLOCK_SIZE, constants.BLOCK_SIZE -1, constants.BLOCK_SIZE -1))
 
-def _get_shadow_position_y(piece, grid_data): # is_valid_position is imported
-    if not piece: return -1
-    current_y_offset = 0
-    while is_valid_position(piece, grid_data, check_y_offset=current_y_offset + 1):
-        current_y_offset += 1
-    return piece.y + current_y_offset
+# _get_shadow_position_y is now imported from core_utils and used directly in draw_main_ui
 
 def _draw_next_piece_area(screen_surface, piece_to_draw, x_pos, y_pos, title_str, fonts):
     title_surface = fonts['title'].render(title_str, True, constants.WHITE)
@@ -227,7 +222,7 @@ def draw_main_ui(screen_surface, gs: GameState, fonts, clock_obj, help_screen_ac
 
     if shadow_enabled_flag:
         if not gs.game_over and gs.current_piece and game_phase_str == "PLAYING":
-            shadow_y = _get_shadow_position_y(gs.current_piece, gs.game_grid)
+            shadow_y = get_shadow_position_y(gs.current_piece, gs.game_grid) # Use imported get_shadow_position_y
             shadow_color = constants.GREY
             if gs.current_piece.shape and gs.current_piece.rotation < len(gs.current_piece.shape):
                 for r_offset, c_offset in gs.current_piece.shape[gs.current_piece.rotation]:

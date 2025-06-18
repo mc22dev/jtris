@@ -1,8 +1,8 @@
 import pygame
 import time
 from .game_state import GameState
-from .piece import Piece # Changed import from .tetris
-from .tetris import is_valid_position, play_sound # Piece removed, functions kept
+from .piece import Piece
+from .core_utils import is_valid_position, play_sound # Changed from .tetris to .core_utils
 from .constants import AI_PLAYER_TOGGLE_KEY, RESTART_KEY, PAUSE_KEY
 # Note: Constants like GRID_WIDTH might be needed if is_valid_position or Piece logic relies on them directly from this file.
 # For now, assuming they are handled within the context of those functions or via gs.
@@ -62,7 +62,7 @@ def handle_player_piece_controls(event, gs: GameState, soft_drop_active_flag: bo
         elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
             original_y = gs.current_piece.y
             # Create a temporary piece for calculation if Piece constructor needs shape_type
-            temp_piece_for_calc = Piece(gs.current_piece.x, original_y, shape_type=gs.current_piece.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+            temp_piece_for_calc = Piece(gs.current_piece.x, original_y, shape_type=gs.current_piece.shape_type) # Func params removed
             temp_piece_for_calc.rotation = gs.current_piece.rotation
 
             calculated_target_y = original_y
@@ -153,7 +153,7 @@ def process_event(event, gs: GameState, joystick_obj, joystick_enabled_flag: boo
                                 gs.current_piece.rotate(gs.game_grid)
                             elif button == 1: # Typically B or Circle
                                 original_y = gs.current_piece.y
-                                temp_piece_for_calc = Piece(gs.current_piece.x, original_y, shape_type=gs.current_piece.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+                                temp_piece_for_calc = Piece(gs.current_piece.x, original_y, shape_type=gs.current_piece.shape_type) # Func params removed
                                 temp_piece_for_calc.rotation = gs.current_piece.rotation
                                 calculated_target_y = original_y
                                 while is_valid_position(temp_piece_for_calc, gs.game_grid, check_y_offset=(calculated_target_y - original_y + 1)):

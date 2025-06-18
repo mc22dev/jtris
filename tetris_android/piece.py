@@ -1,10 +1,11 @@
 import random
 from .constants import SHAPES, PIECE_COLORS
+from .core_utils import is_valid_position, play_sound
 
 class Piece:
-    def __init__(self, x, y, shape_type=None, is_valid_position_func=None, play_sound_func=None): # Allow forcing shape_type for next_piece
-        self.is_valid_position = is_valid_position_func
-        self.play_sound = play_sound_func
+    def __init__(self, x, y, shape_type=None): # Removed is_valid_position_func and play_sound_func
+        # self.is_valid_position = is_valid_position_func # Removed
+        # self.play_sound = play_sound_func # Removed
 
         if shape_type is None:
             self.shape_type = random.randint(0, len(SHAPES) - 1)
@@ -32,8 +33,7 @@ class Piece:
     def rotate(self, grid_data): # Only for main game piece
         original_rotation = self.rotation
         self.rotation = (self.rotation + 1) % len(self.shape)
-        if not self.is_valid_position(self, grid_data): # Use passed in function
+        if not is_valid_position(self, grid_data): # Use directly imported function
             self.rotation = original_rotation
         else:
-            if self.play_sound: # Check if function is provided
-                self.play_sound("rotate")
+            play_sound("rotate") # Use directly imported function

@@ -24,6 +24,7 @@ from . import ai_player # Import the new AI player module
 from . import config_manager # Import the config manager
 from . import input_handler # Import the new input handler module
 from . import game_state # Import game_state module
+from . import core_utils # Import core utilities
 
 # Initialize Pygame
 pygame.init()
@@ -36,27 +37,17 @@ DEBUG_MODE = False
 # SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT are initialized in main()
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
-SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
-SOUND_DIR = "sounds" # Specific to asset loading in tetris.py
-sound_effects_enabled = True # Renamed from sound_enabled
-shadow_enabled = True
-line_blink_enabled = True
-music_enabled = True         # Added
+# SOUND_EFFECTS, SOUND_DIR, sound_effects_enabled are now in core_utils.py
+#SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
+#SOUND_DIR = "sounds"
+#sound_effects_enabled = True
+shadow_enabled = True # This is a config, should remain or be handled by config_manager
+line_blink_enabled = True # This is a config
+music_enabled = True         # This is a config
 
-def load_sound(filename):
-    path = os.path.join(SOUND_DIR, filename)
-    if not os.path.exists(path): print(f"Sound file not found: {path}"); return None
-    try: sound = pygame.mixer.Sound(path); sound.set_volume(0.3); return sound
-    except pygame.error as e: print(f"Error loading sound {filename}: {e}"); return None
-
-def play_sound(sound_name):
-    global sound_effects_enabled # Use new global name
-    if not sound_effects_enabled:
-        return
-    if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
+# load_sound and play_sound are now in core_utils.py
 
 # ... (create_grid is now in game_state.py)
-# def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)] # Moved
 def draw_grid_lines(screen):
     for row in range(GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X, GRID_OFFSET_Y + row * BLOCK_SIZE), (GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE))
     for col in range(GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y), (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + GRID_HEIGHT * BLOCK_SIZE))
@@ -94,51 +85,11 @@ def draw_current_piece_on_grid(screen, piece): # Renamed for clarity
             if r_idx >= 0: # Only draw if within visible grid area
                 pygame.draw.rect(screen, piece.color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
 
-def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
-    if not piece: return False
-    for r_idx, c_idx in piece.current_shape_coords():
-        actual_r = r_idx + check_y_offset
-        if not (0 <= c_idx < GRID_WIDTH): return False
-        if not (actual_r < GRID_HEIGHT): return False
-        if actual_r >= 0 and grid_data[actual_r][c_idx] != 0: return False
-    return True
-
-def add_to_grid(piece, grid_data):
-    if piece:
-        for r_idx, c_idx in piece.current_shape_coords():
-            if r_idx >=0: grid_data[r_idx][c_idx] = piece.color
-        play_sound("drop")
-
-def get_shadow_position_y(piece, grid_data):
-    """
-    Calculates the y-coordinate for the piece's shadow.
-    Iterates downwards from the piece's current y position, checking
-    if the piece would be in a valid position at y + 1.
-    Uses is_valid_position for this check.
-    Returns the last valid y coordinate before collision.
-    """
-    if not piece:
-        return -1 # Or some other indicator of an invalid state
-
-    current_y_offset = 0
-    # We are checking for piece.y + current_y_offset + 1
-    # So, is_valid_position needs to check for an offset from the piece's *original* y.
-    # The 'check_y_offset' parameter in is_valid_position is relative to piece.y.
-    # So, if piece is at y, and we are checking y + k, then check_y_offset = k.
-    while is_valid_position(piece, grid_data, check_y_offset=current_y_offset + 1):
-        current_y_offset += 1
-
-    return piece.y + current_y_offset
-
-def get_full_lines(grid_data):
-    full_lines_indices = []
-    # Iterate top to bottom to get indices in natural order.
-    for r_idx in range(GRID_HEIGHT):
-        if 0 not in grid_data[r_idx]: # Check if line is full
-            full_lines_indices.append(r_idx)
-    return full_lines_indices
-
-def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
+# is_valid_position is now in core_utils.py
+# add_to_grid is now in core_utils.py
+# get_shadow_position_y is now in core_utils.py
+# get_full_lines is now in core_utils.py
+# get_score_for_lines is now in core_utils.py
 
 # spawn_piece_at_start is now in game_state.py
 # calculate_fall_speed is now in game_state.py
@@ -161,15 +112,10 @@ def add_garbage_blocks(grid_data, level): # Note: This function itself was not i
         garbage_row = [GARBAGE_COLOR for _ in range(GRID_WIDTH)]; hole_position = random.randint(0, GRID_WIDTH - 1)
         garbage_row[hole_position] = 0; grid_data[row_index] = garbage_row
 
-    temp_piece_for_check = Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-    return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
+    temp_piece_for_check = Piece(GRID_WIDTH // 2, 0) # Updated Piece instantiation
+    return not core_utils.is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
-# --- Time Formatting Function ---
-def format_time(total_seconds):
-    """Formats total seconds into MM:SS string."""
-    minutes = int(total_seconds // 60) # Calculate whole minutes
-    seconds = int(total_seconds % 60) # Calculate remaining seconds
-    return f"{minutes:02d}:{seconds:02d}" # Format as MM:SS with leading zeros
+# format_time is now in core_utils.py
 
 def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
     global TITLE_FONT
@@ -314,17 +260,15 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
 # --- Input Handling Sub-functions ---
 
 # Helper functions for _update_game_state
-def _process_ai_move(gs, play_sound_func, is_valid_position_func):
+def _process_ai_move(gs): # Removed play_sound_func, is_valid_position_func
     # AI Player Decision Logic
     # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
     # gs.soft_drop_active are modified here.
     # Dependencies: ai_player.clone_grid, ai_player.find_best_move, DEBUG_MODE
     if time.time() - gs.last_ai_move_time > AI_MOVE_DELAY:
         grid_copy_for_ai = ai_player.clone_grid(gs.game_grid)
-        best_move_info = ai_player.find_best_move(
-            grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
-            is_valid_position_func=is_valid_position_func,
-            play_sound_func=play_sound_func
+        best_move_info = ai_player.find_best_move( # Call updated, no longer needs funcs
+            grid_copy_for_ai, gs.current_piece, gs.next_piece_1
         )
 
         if best_move_info and best_move_info['x'] != -1:
@@ -334,26 +278,26 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func):
             gs.current_piece.is_hard_dropping_animated = True
             gs.soft_drop_active = False
         else:
-            if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
+            if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.") # DEBUG_MODE is global in tetris.py
             gs.game_over = True
         gs.last_ai_move_time = time.time()
 
-def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+def _process_animated_hard_drop(gs, line_blink_enabled_flag): # Removed play_sound_func, is_valid_position_func
     # Animated Hard Drop Logic
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
     # Returns: dict for game phase transition if line clear, else None
-    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
+    # Dependencies: core_utils.add_to_grid, core_utils.get_full_lines, play_sound_func (passed), Piece, is_valid_position_func (passed),
     # LINE_ANIMATION_DURATION, GRID_WIDTH
     gs.current_piece.y += 1
     if gs.current_piece.y >= gs.current_piece.target_y_for_animated_drop:
         gs.current_piece.y = gs.current_piece.target_y_for_animated_drop
         gs.current_piece.is_hard_dropping_animated = False
-        add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+        core_utils.add_to_grid(gs.current_piece, gs.game_grid) # Uses core_utils.play_sound internally
 
-        cleared_row_indices = get_full_lines(gs.game_grid)
+        cleared_row_indices = core_utils.get_full_lines(gs.game_grid)
         if cleared_row_indices:
-            if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
+            if len(cleared_row_indices) == 4: play_sound_func("tetris_clear") # play_sound_func is core_utils.play_sound passed in
             elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
             gs.current_piece = None # Piece locked, wait for animation
             return {
@@ -366,43 +310,40 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
             if gs.current_piece:
                 gs.current_piece.x = GRID_WIDTH // 2
                 gs.current_piece.y = 0
-                gs.current_piece.is_valid_position = is_valid_position_func
-                gs.current_piece.play_sound = play_sound_func
+                # Removed .is_valid_position and .play_sound assignments
 
             gs.next_piece_1 = gs.next_piece_2
-            if gs.next_piece_1:
-                gs.next_piece_1.is_valid_position = is_valid_position_func
-                gs.next_piece_1.play_sound = play_sound_func
+            # Removed .is_valid_position and .play_sound assignments for next_piece_1
 
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+            gs.next_piece_2 = Piece(0, 0) # Updated Piece instantiation
 
-            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+            if gs.current_piece and not core_utils.is_valid_position(gs.current_piece, gs.game_grid): # Use core_utils
                 gs.game_over = True
                 gs.current_piece = None
         gs.last_fall_time = time.time()
         gs.soft_drop_active = False
     return None
 
-def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+def _process_piece_descent(gs, line_blink_enabled_flag): # Removed play_sound_func, is_valid_position_func
     # Automatic Piece Descent
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
     # Returns: dict for game phase transition if line clear, else None
-    # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
+    # Dependencies: core_utils.add_to_grid, core_utils.get_full_lines, play_sound_func (passed), Piece, is_valid_position_func (passed),
     # LINE_ANIMATION_DURATION, GRID_WIDTH
     fall_interval = gs.current_fall_speed
     if gs.soft_drop_active: fall_interval = min(gs.current_fall_speed, 0.05)
 
     if time.time() - gs.last_fall_time > fall_interval:
         gs.current_piece.y += 1
-        if not is_valid_position_func(gs.current_piece, gs.game_grid):
+        if not core_utils.is_valid_position(gs.current_piece, gs.game_grid): # Use core_utils.is_valid_position
             gs.current_piece.y -= 1
-            add_to_grid(gs.current_piece, gs.game_grid) # Uses global play_sound
+            core_utils.add_to_grid(gs.current_piece, gs.game_grid)
 
-            cleared_row_indices = get_full_lines(gs.game_grid)
+            cleared_row_indices = core_utils.get_full_lines(gs.game_grid)
             if cleared_row_indices:
-                if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
-                elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
+                if len(cleared_row_indices) == 4: core_utils.play_sound("tetris_clear") # Use core_utils.play_sound
+                elif len(cleared_row_indices) > 0: core_utils.play_sound("line_clear")
                 gs.current_piece = None # Piece locked, wait for animation
                 return {
                     'game_phase_str': "LINE_ANIMATION",
@@ -414,17 +355,14 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
                 if gs.current_piece:
                     gs.current_piece.x = GRID_WIDTH // 2
                     gs.current_piece.y = 0
-                    gs.current_piece.is_valid_position = is_valid_position_func
-                    gs.current_piece.play_sound = play_sound_func
+                # Removed .is_valid_position and .play_sound assignments
 
                 gs.next_piece_1 = gs.next_piece_2
-                if gs.next_piece_1:
-                    gs.next_piece_1.is_valid_position = is_valid_position_func
-                    gs.next_piece_1.play_sound = play_sound_func
+            # Removed .is_valid_position and .play_sound assignments for next_piece_1
 
-                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+            gs.next_piece_2 = Piece(0, 0) # Updated Piece instantiation
 
-                if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+            if gs.current_piece and not core_utils.is_valid_position(gs.current_piece, gs.game_grid): # Use core_utils
                     gs.game_over = True
                     gs.current_piece = None
             gs.last_fall_time = time.time()
@@ -433,11 +371,11 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
             gs.last_fall_time = time.time()
     return None
 
-def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag):
+def _process_line_animation(gs, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag): # Removed play_sound_func, is_valid_position_func
     # Line Animation Phase
     # Modifies: gs (grid, score, level, etc.), gs.current_piece, gs.next_piece_1, gs.next_piece_2, gs.game_over
     # Returns: updated line_animation_timer_val, lines_being_animated_list, new_game_phase_str
-    # Dependencies: _finalize_line_clear, calculate_fall_speed, add_garbage_blocks, is_valid_position_func, Piece
+    # Dependencies: _finalize_line_clear, game_state.calculate_fall_speed, add_garbage_blocks, core_utils.is_valid_position, Piece
 
     line_animation_timer_val -= 1
     new_game_phase_str = "LINE_ANIMATION" # Default to staying in this phase
@@ -464,17 +402,14 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
             if gs.current_piece:
                 gs.current_piece.x = GRID_WIDTH // 2
                 gs.current_piece.y = 0
-                gs.current_piece.is_valid_position = is_valid_position_func
-                gs.current_piece.play_sound = play_sound_func
+                # Removed .is_valid_position and .play_sound assignments
 
             gs.next_piece_1 = gs.next_piece_2
-            if gs.next_piece_1:
-                gs.next_piece_1.is_valid_position = is_valid_position_func
-                gs.next_piece_1.play_sound = play_sound_func
+            # Removed .is_valid_position and .play_sound assignments for next_piece_1
 
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+            gs.next_piece_2 = Piece(0, 0) # Updated Piece instantiation
 
-            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+            if gs.current_piece and not core_utils.is_valid_position(gs.current_piece, gs.game_grid): # Use core_utils
                 gs.game_over = True
                 gs.current_piece = None
 
@@ -490,14 +425,13 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
 # --- Game State Reset Function ---
 def reset_game_state():
     """Initializes and returns all game state variables for a new game."""
-    game_grid = game_state.create_grid() # Updated call
-    current_piece = game_state.spawn_piece_at_start(is_valid_position, play_sound) # Updated call & pass functions
-    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound) # This remains a direct Piece call
-    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound) # This remains a direct Piece call
+    game_grid = game_state.create_grid()
+    current_piece = game_state.spawn_piece_at_start() # Updated call, no funcs passed
+    next_piece_1 = Piece(0, 0) # Piece constructor updated
+    next_piece_2 = Piece(0, 0) # Piece constructor updated
 
     game_over = False
-    # is_valid_position is a local function in tetris.py, current_piece is a Piece instance
-    if current_piece and not is_valid_position(current_piece, game_grid):
+    if current_piece and not core_utils.is_valid_position(current_piece, game_grid): # Use core_utils
         game_over = True
         current_piece = None
 
@@ -792,27 +726,24 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
 
     if current_game_phase == "LINE_ANIMATION":
         current_line_animation_timer, current_lines_being_animated, current_game_phase = \
-            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag)
+            _process_line_animation(gs, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag) # Removed func passthrough
 
     elif current_game_phase == "PLAYING" and not gs.game_paused:
         if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
-            _process_ai_move(gs, play_sound, is_valid_position)
+            _process_ai_move(gs) # Removed func passthrough
             # AI move might set piece to hard drop or cause game over
 
-        # IMPORTANT: Check gs.current_piece again as AI might have made it None (e.g. game over)
-        # or if it completed a hard drop in a theoretical synchronous way (not current design but good check)
         if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
-            if not gs.game_over: # Don't process if AI already detected game over
-                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+            if not gs.game_over:
+                hard_drop_result = _process_animated_hard_drop(gs, line_blink_enabled_flag) # Removed func passthrough
                 if hard_drop_result:
                     current_game_phase = hard_drop_result['game_phase_str']
                     current_lines_being_animated = hard_drop_result['lines_being_animated']
                     current_line_animation_timer = hard_drop_result['line_animation_timer']
 
-        # IMPORTANT: Check gs.current_piece again as hard drop might have cleared lines and set it to None
-        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated: # Note: added elif
-             if not gs.game_over: # Don't process if AI/Hard drop already detected game over
-                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+             if not gs.game_over:
+                descent_result = _process_piece_descent(gs, line_blink_enabled_flag) # Removed func passthrough
                 if descent_result:
                     current_game_phase = descent_result['game_phase_str']
                     current_lines_being_animated = descent_result['lines_being_animated']
@@ -820,24 +751,23 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
 
     # --- Game Over State Update (after all game logic for the frame) ---
     if gs.game_over and not gs.game_over_sound_played:
-        play_sound("game_over")
+        core_utils.play_sound("game_over") # Updated call
         gs.game_over_sound_played = True
         gs.current_piece = None # Ensure no piece is active
-        if final_game_time_str_val is None: # final_game_time_str_val is from original signature
+        if final_game_time_str_val is None:
             current_elapsed_time = time.time() - game_start_time_val - total_paused_duration_val
-            final_game_time_str_val = format_time(max(0, current_elapsed_time)) # This should be gs.final_game_time_str
+            final_game_time_str_val = core_utils.format_time(max(0, current_elapsed_time)) # Updated call
 
     # Determine the time string to display
     calculated_formatted_time_str = ""
-    if gs.game_over and final_game_time_str_val: # final_game_time_str_val from original signature
+    if gs.game_over and final_game_time_str_val:
         calculated_formatted_time_str = final_game_time_str_val
     elif gs.game_paused:
-        # time_at_pause_val and game_start_time_val are from original signature
         elapsed_at_pause_moment = (time_at_pause_val - game_start_time_val) - total_paused_duration_val
-        calculated_formatted_time_str = format_time(max(0, elapsed_at_pause_moment))
+        calculated_formatted_time_str = core_utils.format_time(max(0, elapsed_at_pause_moment)) # Updated call
     else:
         current_elapsed_seconds = (time.time() - game_start_time_val) - total_paused_duration_val
-        calculated_formatted_time_str = format_time(max(0, current_elapsed_seconds))
+        calculated_formatted_time_str = core_utils.format_time(max(0, current_elapsed_seconds)) # Updated call
 
     # Return values based on the updated gs and local phase vars
     return {
@@ -875,7 +805,7 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
     for _ in range(num_cleared):
         grid_data.insert(0, [0 for _ in range(GRID_WIDTH)])
 
-    current_score += get_score_for_lines(num_cleared, level)
+    current_score += core_utils.get_score_for_lines(num_cleared, level) # Updated call
     total_lines += num_cleared
     lines_for_lvl = total_lines % LINES_PER_LEVEL
 
@@ -883,7 +813,7 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
     leveled_up = False
     if new_level_calc > level:
         level = min(new_level_calc, 100) # Cap level
-        play_sound("level_up")
+        core_utils.play_sound("level_up") # Updated call
         leveled_up = True
 
     return {
@@ -1261,6 +1191,8 @@ def main():
     clock = pygame.time.Clock() # Moved clock initialization here as it's used by _draw_game_screen
 
     # Initial game state setup
+    # Note: reset_game_state now calls game_state.create_grid, game_state.spawn_piece_at_start, game_state.calculate_fall_speed.
+    # game_state.spawn_piece_at_start is passed tetris.is_valid_position and tetris.play_sound (which will become core_utils versions)
     game_state_dict = reset_game_state()
     (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
@@ -1268,6 +1200,9 @@ def main():
      game_over_sound_played, ai_mode_active, last_ai_move_time,
      game_start_time, final_game_time_str, game_paused,
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
+
+    # Update core_utils sound state from loaded config
+    core_utils.sound_effects_enabled = sound_effects_enabled
 
     running = True
     help_screen_active = False

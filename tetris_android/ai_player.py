@@ -1,5 +1,6 @@
 from .piece import Piece
 from .constants import GRID_WIDTH, GRID_HEIGHT
+from .core_utils import is_valid_position # play_sound is not directly used by AI functions
 
 HEURISTIC_WEIGHTS = {
     'aggregate_height': -0.510066,
@@ -34,13 +35,14 @@ def _get_cleared_lines_and_new_grid(grid_copy_to_check):
             r -= 1
     return lines_cleared_count, grid_after_clearing
 
-def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation, is_valid_position_func, play_sound_func):
+def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation): # Removed func params
     """
     Simulates placing a piece at a given x and rotation on a (deep)copy of the grid.
     Performs a hard drop and calculates the outcome.
     """
     sim_grid_current_move = clone_grid(grid_to_simulate_on)
-    temp_piece = Piece(target_x, 0, shape_type=piece_to_simulate.shape_type, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+    # Piece instantiation no longer takes is_valid_position_func, play_sound_func
+    temp_piece = Piece(target_x, 0, shape_type=piece_to_simulate.shape_type)
     temp_piece.rotation = target_rotation
     temp_piece.x = target_x
 
@@ -50,13 +52,13 @@ def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, targe
         min_r_offset = min(r for r, c in current_shape_blocks)
     temp_piece.y = -min_r_offset
 
-    if not is_valid_position_func(temp_piece, sim_grid_current_move): # Use passed function
+    if not is_valid_position(temp_piece, sim_grid_current_move): # Use imported is_valid_position
         return None, 0, -1, False
 
     landing_y = temp_piece.y
     while True:
         temp_piece.y += 1
-        if not is_valid_position_func(temp_piece, sim_grid_current_move): # Use passed function
+        if not is_valid_position(temp_piece, sim_grid_current_move): # Use imported is_valid_position
             temp_piece.y -= 1
             landing_y = temp_piece.y
             break
@@ -102,7 +104,7 @@ def evaluate_board_state(grid, lines_cleared_by_move):
     score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
     return score
 
-def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_position_func, play_sound_func):
+def find_best_move(grid_data, current_piece_obj, next_piece_obj): # Removed func params
     """
     Finds the best move (column and rotation) for the current piece.
     """
@@ -112,7 +114,8 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
     best_landing_y = -1
 
     for rotation_idx in range(len(current_piece_obj.shape)):
-        temp_eval_piece = Piece(0, 0, shape_type=current_piece_obj.shape_type, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+        # Piece instantiation no longer takes is_valid_position_func, play_sound_func
+        temp_eval_piece = Piece(0, 0, shape_type=current_piece_obj.shape_type)
         temp_eval_piece.rotation = rotation_idx
         current_shape_blocks = temp_eval_piece.shape[temp_eval_piece.rotation]
         min_c_offset_for_shape = 0
@@ -123,8 +126,9 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
 
         for x_col in range(-min_c_offset_for_shape, GRID_WIDTH - max_c_offset_for_shape):
             grid_copy = clone_grid(grid_data)
+            # Call to simulate_place_piece no longer passes func params
             resulting_grid, lines_cleared, landing_y, is_possible = \
-                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx, is_valid_position_func, play_sound_func)
+                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx)
 
             if is_possible:
                 current_move_score = evaluate_board_state(resulting_grid, lines_cleared)
