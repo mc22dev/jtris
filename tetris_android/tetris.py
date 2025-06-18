@@ -23,6 +23,7 @@ from .piece import Piece # Import Piece from its new location
 from . import ai_player # Import the new AI player module
 from . import config_manager # Import the config manager
 from . import input_handler # Import the new input handler module
+from . import game_state # Import game_state module
 
 # Initialize Pygame
 pygame.init()
@@ -54,8 +55,8 @@ def play_sound(sound_name):
         return
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
 
-# ... (create_grid, draw_grid_lines, draw_blocks, draw_piece - largely same)
-def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
+# ... (create_grid is now in game_state.py)
+# def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)] # Moved
 def draw_grid_lines(screen):
     for row in range(GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X, GRID_OFFSET_Y + row * BLOCK_SIZE), (GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE))
     for col in range(GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y), (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + GRID_HEIGHT * BLOCK_SIZE))
@@ -139,11 +140,9 @@ def get_full_lines(grid_data):
 
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
-def spawn_piece_at_start(): # Renamed for clarity
-    return Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-
-def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
-def add_garbage_blocks(grid_data, level):
+# spawn_piece_at_start is now in game_state.py
+# calculate_fall_speed is now in game_state.py
+def add_garbage_blocks(grid_data, level): # Note: This function itself was not in the list to move
     if level < GARBAGE_START_LEVEL: return False
     num_garbage_rows = min(MAX_GARBAGE_ROWS, (level - GARBAGE_START_LEVEL) // 2 + 1)
 
@@ -455,8 +454,8 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
         gs.lines_for_current_level = finalize_result["lines_for_lvl"]
 
         if finalize_result["leveled_up"]:
-            gs.current_fall_speed = calculate_fall_speed(gs.current_level)
-            if add_garbage_blocks(gs.game_grid, gs.current_level): # add_garbage_blocks uses global Piece
+            gs.current_fall_speed = game_state.calculate_fall_speed(gs.current_level) # Updated call
+            if add_garbage_blocks(gs.game_grid, gs.current_level):
                 gs.game_over = True
                 gs.current_piece = None
 
@@ -491,22 +490,23 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
 # --- Game State Reset Function ---
 def reset_game_state():
     """Initializes and returns all game state variables for a new game."""
-    game_grid = create_grid()
-    current_piece = spawn_piece_at_start() # Already passes functions
-    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    game_grid = game_state.create_grid() # Updated call
+    current_piece = game_state.spawn_piece_at_start(is_valid_position, play_sound) # Updated call & pass functions
+    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound) # This remains a direct Piece call
+    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound) # This remains a direct Piece call
 
     game_over = False
-    if not is_valid_position(current_piece, game_grid):
+    # is_valid_position is a local function in tetris.py, current_piece is a Piece instance
+    if current_piece and not is_valid_position(current_piece, game_grid):
         game_over = True
-        current_piece = None # No piece if game over at start
+        current_piece = None
 
     score = 0
     current_level = 1
     total_lines_cleared = 0
     lines_for_current_level = 0
 
-    current_fall_speed = calculate_fall_speed(current_level)
+    current_fall_speed = game_state.calculate_fall_speed(current_level) # Updated call
     last_fall_time = time.time()
     soft_drop_active = False
     game_over_sound_played = False # Reset sound flag
