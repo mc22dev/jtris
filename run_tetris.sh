@@ -4,16 +4,17 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Change to the tetris_android directory relative to the script location
-cd "$SCRIPT_DIR/tetris_android"
+# Ensure we are in the script's directory (project root)
+cd "$SCRIPT_DIR"
 
-# Run the game using python3; fallback to python if python3 is not found
+# Run the game as a module using python3; fallback to python if python3 is not found
+echo "Launching Tetris from project root..."
 if command -v python3 &> /dev/null
 then
-    python3 main.py
+    python3 -m tetris_android.main
 elif command -v python &> /dev/null
 then
-    python main.py
+    python -m tetris_android.main
 else
     echo "Python interpreter not found. Please install Python 3 or Python."
     exit 1

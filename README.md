@@ -27,7 +27,7 @@ pip install pygame
 3. Create a directory named `tetris_android/sounds/` if you want to use sound effects (sound files not provided). Ensure `DejaVuSans.ttf` (a real font file, not the placeholder) is in `tetris_android/`.
 4. Run the game from the project root using:
 ```bash
-python tetris_android/main.py
+python -m tetris_android.main
 ```
 
 ## Using Launcher Scripts
