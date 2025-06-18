@@ -30,6 +30,24 @@ pip install pygame
 python tetris_android/main.py
 ```
 
+## Using Launcher Scripts
+
+For convenience, launcher scripts are provided in the project root:
+
+*   **For Linux/macOS:**
+    Open your terminal, navigate to the project root directory, and run:
+    ```bash
+    ./run_tetris.sh
+    ```
+    If you get a permission error, you might need to make it executable first (this should have been set by git, but just in case): `chmod +x run_tetris.sh`.
+
+*   **For Windows:**
+    Open Command Prompt or PowerShell, navigate to the project root directory, and run:
+    ```bat
+    .\run_tetris.bat
+    ```
+    Alternatively, you can usually double-click `run_tetris.bat` from the File Explorer.
+
 ## Controls (Desktop)
 - **Left Arrow**: Move piece left
 - **Right Arrow**: Move piece right
