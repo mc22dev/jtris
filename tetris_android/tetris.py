@@ -1139,9 +1139,9 @@ def main():
     # --- Background Music Loading ---
     background_music_file = "background_01.mp3"
     background_music_loaded = False
-    if os.path.isdir(SOUND_DIR): # Only attempt to load if sound directory exists
+    if os.path.isdir(core_utils.SOUND_DIR): # Only attempt to load if sound directory exists
         try:
-            music_path = os.path.join(SOUND_DIR, background_music_file)
+            music_path = os.path.join(core_utils.SOUND_DIR, background_music_file)
             if not os.path.exists(music_path):
                 if DEBUG_MODE: print(f"DEBUG: Background music file not found at {music_path}")
                 # background_music_loaded remains False
