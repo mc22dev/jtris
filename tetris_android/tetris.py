@@ -1361,7 +1361,7 @@ def main():
             help_screen_active, help_text_surfaces,
             game_phase, current_username_input, top_scores_list,
             lines_being_animated, line_animation_timer,
-            config_menu_active, sound_effects_enabled, shadow_enabled, # Renamed
+            config_menu_active, core_utils.sound_effects_enabled, shadow_enabled, # Renamed
             line_blink_enabled, music_enabled # Added
         )
 
