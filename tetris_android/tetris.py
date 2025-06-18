@@ -1227,7 +1227,7 @@ def main():
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
             joystick, joystick_enabled, help_screen_active,
             game_phase, current_username_input, config_menu_active,
-            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, DEBUG_MODE # Pass DEBUG_MODE
+            core_utils.sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, DEBUG_MODE # Pass DEBUG_MODE
         )
 
         running = event_handling_result["running"]
