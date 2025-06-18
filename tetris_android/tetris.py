@@ -40,10 +40,10 @@ SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 # SOUND_EFFECTS, SOUND_DIR, sound_effects_enabled are now in core_utils.py
 #SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
 #SOUND_DIR = "sounds"
-#sound_effects_enabled = True
-shadow_enabled = True # This is a config, should remain or be handled by config_manager
-line_blink_enabled = True # This is a config
-music_enabled = True         # This is a config
+#sound_effects_enabled = True # Now managed in core_utils
+
+# shadow_enabled, line_blink_enabled, music_enabled will be initialized in main() from config
+# and passed as parameters. Module-level defaults are removed.
 
 # load_sound and play_sound are now in core_utils.py
 
@@ -1114,23 +1114,21 @@ def main():
         DEBUG_MODE = True
         print("DEBUG MODE ENABLED")
     # --- End Argument Parsing ---
-    global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
-    global sound_effects_enabled # Renamed
-    global shadow_enabled
-    global line_blink_enabled
-    global music_enabled         # Added
+    global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT
+    # Removed sound_effects_enabled, shadow_enabled, etc. from globals here, they'll be handled locally in main or via core_utils
 
     # Load configuration
-    loaded_config = config_manager.load_config(DEBUG_MODE) # This now returns a dict with all 4 keys or defaults
+    loaded_config = config_manager.load_config(DEBUG_MODE)
 
-    # Initialize module globals from the fully populated loaded_config
-    # Fallback to existing global values (which are module-level defaults) if a key is somehow missing,
-    # though load_config is designed to always provide all keys with their defaults.
-    sound_effects_enabled = loaded_config.get("sound_effects_enabled", sound_effects_enabled)
-    shadow_enabled = loaded_config.get("shadow_enabled", shadow_enabled)
-    line_blink_enabled = loaded_config.get("line_blink_enabled", line_blink_enabled)
-    music_enabled = loaded_config.get("music_enabled", music_enabled)
-    # The isinstance check for loaded_config itself is already handled robustly by load_config returning a default dict.
+    # Initialize settings from the loaded configuration.
+    # config_manager.load_config ensures all keys are present, using defaults if not in file.
+    core_utils.sound_effects_enabled = loaded_config["sound_effects_enabled"]
+
+    # These variables are local to main and passed to _handle_events and _draw_game_screen.
+    # _handle_events returns their potentially modified values.
+    shadow_enabled = loaded_config["shadow_enabled"]
+    line_blink_enabled = loaded_config["line_blink_enabled"]
+    music_enabled = loaded_config["music_enabled"]
 
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
@@ -1159,12 +1157,16 @@ def main():
         # sound_enabled might be set to False here if desired, or handled by individual play calls
 
     # --- Sound Effects Loading ---
-    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.") # This check is somewhat redundant if already done for music, but kept for clarity for SFX
+    # SOUND_DIR is now in core_utils, SOUND_EFFECTS is in core_utils
+    if not os.path.isdir(core_utils.SOUND_DIR): print(f"Sound directory '{core_utils.SOUND_DIR}' not found.")
     else:
-        SOUND_EFFECTS["move"]=load_sound("move.wav"); SOUND_EFFECTS["rotate"]=load_sound("rotate.wav")
-        SOUND_EFFECTS["drop"]=load_sound("drop.wav"); SOUND_EFFECTS["line_clear"]=load_sound("line_clear.wav")
-        SOUND_EFFECTS["tetris_clear"]=load_sound("tetris_clear.wav"); SOUND_EFFECTS["level_up"]=load_sound("level_up.wav")
-        SOUND_EFFECTS["game_over"]=load_sound("game_over.wav")
+        core_utils.SOUND_EFFECTS["move"]=core_utils.load_sound("move.wav")
+        core_utils.SOUND_EFFECTS["rotate"]=core_utils.load_sound("rotate.wav")
+        core_utils.SOUND_EFFECTS["drop"]=core_utils.load_sound("drop.wav")
+        core_utils.SOUND_EFFECTS["line_clear"]=core_utils.load_sound("line_clear.wav")
+        core_utils.SOUND_EFFECTS["tetris_clear"]=core_utils.load_sound("tetris_clear.wav")
+        core_utils.SOUND_EFFECTS["level_up"]=core_utils.load_sound("level_up.wav")
+        core_utils.SOUND_EFFECTS["game_over"]=core_utils.load_sound("game_over.wav")
 
     # --- Initial Music Playback ---
     if background_music_loaded and music_enabled: # Changed sound_enabled to music_enabled
@@ -1201,8 +1203,8 @@ def main():
      game_start_time, final_game_time_str, game_paused,
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
 
-    # Update core_utils sound state from loaded config
-    core_utils.sound_effects_enabled = sound_effects_enabled
+    # core_utils.sound_effects_enabled is already set from loaded_config directly.
+    # sound_effects_enabled local variable in main is no longer needed for this purpose.
 
     running = True
     help_screen_active = False
@@ -1240,10 +1242,10 @@ def main():
         action_request = event_handling_result["action_request"]
         help_screen_active = event_handling_result["help_screen_active"]
         config_menu_active = event_handling_result["config_menu_active"]
-        sound_effects_enabled = event_handling_result["sound_effects_enabled"] # Key updated
+        core_utils.sound_effects_enabled = event_handling_result["sound_effects_enabled"] # Update core_utils
         shadow_enabled = event_handling_result["shadow_enabled"]
         line_blink_enabled = event_handling_result["line_blink_enabled"]
-        music_enabled = event_handling_result["music_enabled"] # Added
+        music_enabled = event_handling_result["music_enabled"]
         current_username_input = event_handling_result["current_username_input"]
         # game_phase is now primarily managed by main based on action_request or game_over state changes
 
