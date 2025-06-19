@@ -314,8 +314,9 @@ def _handle_restart_action():
 
 # _unpack_game_state is removed as main will use GameState object directly.
 
-# _render_help_text_surfaces, _draw_help_screen, _draw_high_score_screen, and the main _draw_game_screen
-# have been removed as their functionality is now in ui_manager.py
+# All local drawing functions (_render_help_text_surfaces, _draw_help_screen,
+# _draw_high_score_screen, _draw_game_screen) are now confirmed removed.
+# Their functionality is in ui_manager.py.
 
 # Config functions are now in config_manager.py
 
@@ -822,131 +823,9 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
         "leveled_up": leveled_up
     }
 
-def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
-    help_lines_data = [
-        ("TETRIS - HELP", title_font),
-        ("", section_font), # Spacer
-        ("Keyboard Controls:", section_font),
-        ("  Left Arrow:  Move Piece Left", info_font),
-        ("  Right Arrow: Move Piece Right", info_font),
-        ("  Up Arrow:    Rotate Piece", info_font),
-        ("  Down Arrow:  Soft Drop Piece", info_font),
-        ("  Space Bar:   Hard Drop Piece", info_font),
-        ("  P:           Pause / Resume Game", info_font),
-        ("  A:           Toggle AI Mode", info_font),
-        ("  R:           Restart Game (Game Over)", info_font),
-        ("  H:           Show / Hide Help", info_font), # This line is already correct
-        ("  ESC:         Quit Game / Close Help", info_font),
-        ("", section_font), # Spacer
-        ("Joystick Controls (Defaults):", section_font),
-        ("  Analog X / D-Pad X:   Move Left/Right", info_font),
-        ("  Analog Y / D-Pad Y (Down): Soft Drop", info_font),
-        ("  D-Pad Y (Up):         Rotate Piece", info_font),
-        ("  Button 0 (A/X):       Rotate Piece", info_font),
-        ("  Button 1 (B/Circle):  Hard Drop Piece", info_font),
-        ("  Button 7 (Start):     Pause/Resume/Restart", info_font),
-        ("  Button 6 (Select):    Toggle AI Mode", info_font),
-        ("", section_font), # Spacer
-        ("Press 'H' or 'ESC' to close.", info_font) # This line is also already correct
-    ]
-    rendered_surfaces = []
-    for text, font in help_lines_data:
-        surface = font.render(text, True, text_color)
-        rendered_surfaces.append(surface)
-    return rendered_surfaces
-
-def _draw_help_screen(screen_surface, help_text_surfaces_list):
-    # Draw Overlay
-    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 180)) # Black with ~70% opacity
-    screen_surface.blit(overlay, (0,0))
-
-    # Calculate Total Height and Starting Position
-    total_text_height = 0
-    line_padding = 5 # pixels
-    for surface in help_text_surfaces_list:
-        total_text_height += surface.get_height()
-    total_height_with_padding = total_text_height + (len(help_text_surfaces_list) - 1) * line_padding
-    start_y = (SCREEN_HEIGHT - total_height_with_padding) // 2
-
-    # Blit Text Surfaces
-    current_y = start_y
-    for surface in help_text_surfaces_list:
-        text_x = (SCREEN_WIDTH - surface.get_width()) // 2
-        screen_surface.blit(surface, (text_x, current_y))
-        current_y += surface.get_height() + line_padding
-
-def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
-    # """
-    # Draws the high score screen.
-    # Args:
-    #     screen_surface: Pygame screen surface.
-    #     top_scores_list (list): List of top score dictionaries.
-    #     fonts (dict): Dictionary containing Pygame font objects (e.g., fonts["title"], fonts["score"], fonts["info"]).
-    # """
-    screen_surface.fill(BLACK) # This is the added line
-
-    title_font = fonts.get("title", pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE))
-    score_font = fonts.get("score", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
-    info_font = fonts.get("info", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
-
-    # Title
-    title_surf = title_font.render("Top 10 Scores", True, WHITE)
-    title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 200))
-    screen_surface.blit(title_surf, title_rect)
-
-    start_y_scores = title_rect.bottom + 40
-    line_height = score_font.get_height() + 10
-
-    if not top_scores_list:
-        no_scores_surf = info_font.render("No high scores yet!", True, WHITE)
-        no_scores_rect = no_scores_surf.get_rect(center=(SCREEN_WIDTH // 2, start_y_scores + line_height * 2))
-        screen_surface.blit(no_scores_surf, no_scores_rect)
-    else:
-        rank_x = SCREEN_WIDTH // 2 - 250
-        name_x = SCREEN_WIDTH // 2 - 150
-        score_val_x = SCREEN_WIDTH // 2 + 100
-        # time_str_x = SCREEN_WIDTH // 2 + 250 # Time column commented out for now
-
-        header_rank_surf = score_font.render("Rank", True, YELLOW)
-        header_name_surf = score_font.render("Name", True, YELLOW)
-        header_score_surf = score_font.render("Score", True, YELLOW)
-
-        screen_surface.blit(header_rank_surf, (rank_x, start_y_scores))
-        screen_surface.blit(header_name_surf, (name_x, start_y_scores))
-        # For score header, position its right edge at score_val_x + some padding for values, or center it above values
-        screen_surface.blit(header_score_surf, (score_val_x + 50 - header_score_surf.get_width(), start_y_scores))
-
-
-        current_y = start_y_scores + line_height
-
-        for i, entry in enumerate(top_scores_list):
-            if i >= 10:
-                break
-
-            rank_str = f"{i + 1}."
-            username_str = entry.get("username", "N/A")[:15] # Truncate username if too long
-            score_str = str(entry.get("score", 0))
-
-            rank_surf = score_font.render(rank_str, True, WHITE)
-            name_surf = score_font.render(username_str, True, WHITE)
-            score_val_surf = score_font.render(score_str, True, WHITE)
-
-            screen_surface.blit(rank_surf, (rank_x, current_y))
-            screen_surface.blit(name_surf, (name_x, current_y))
-            # Align score value to the right
-            screen_surface.blit(score_val_surf, (score_val_x + 50 - score_val_surf.get_width(), current_y))
-
-            current_y += line_height
-
-    instruction_y = SCREEN_HEIGHT - 100
-    instruction_surf = info_font.render("Press any key to Restart, ESC to Quit", True, WHITE)
-    instruction_rect = instruction_surf.get_rect(center=(SCREEN_WIDTH // 2, instruction_y))
-    screen_surface.blit(instruction_surf, instruction_rect)
-
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag): # Signature updated
-    # _render_help_text_surfaces, _draw_help_screen, _draw_high_score_screen, and the main _draw_game_screen
-    # have been removed as their functionality is now in ui_manager.py
+# All local drawing functions (_render_help_text_surfaces, _draw_help_screen,
+# _draw_high_score_screen, _draw_game_screen) are now confirmed removed.
+# Their functionality is in ui_manager.py.
 
 def main():
     # --- Argument Parsing ---
@@ -1256,7 +1135,8 @@ def main():
                 game_phase = "HIGH_SCORE_DISPLAY"
                 if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {gs.score}). game_phase set to '{game_phase}'.")
 
-        # Call ui_manager.draw_main_ui
+        # Drawing call is now correctly to ui_manager.draw_main_ui as per previous patch.
+        # This diff focuses on removing the orphaned local drawing functions.
         ui_manager.draw_main_ui(
             screen, gs, fonts, clock,
             help_screen_active, help_text_surfaces,
