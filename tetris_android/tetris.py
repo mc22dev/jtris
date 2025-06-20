@@ -5,6 +5,7 @@ import os
 import copy
 import json
 import argparse
+from .config_manager import ConfigManager, set_debug_mode as set_cm_debug_mode
 from .constants import (
     BLACK, WHITE, CYAN, YELLOW, MAGENTA, GREEN, RED, BLUE, ORANGE, GREY, GARBAGE_COLOR,
     PIECE_COLORS, SHAPES,
@@ -640,84 +641,7 @@ def _unpack_game_state(game_state_dict):
             game_start_time, final_game_time_str, game_paused,
             time_at_pause, total_paused_duration)
 
-def load_config():
-    filename = "config.json"
-    default_config = {
-        "sound_effects_enabled": True,
-        "shadow_enabled": True,
-        "line_blink_enabled": True,
-        "music_enabled": True
-    }
-
-    try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-            if not isinstance(data, dict): # Ensure data is a dictionary before using .get()
-                if DEBUG_MODE: print(f"Warning: {filename} content is not a dictionary. Using defaults.")
-                return default_config.copy()
-
-            final_config = {}
-
-            # Handle sound_effects_enabled (with backward compatibility for 'sound_enabled')
-            loaded_sound_fx = data.get("sound_effects_enabled")
-            if isinstance(loaded_sound_fx, bool):
-                final_config["sound_effects_enabled"] = loaded_sound_fx
-            else:
-                old_sound_enabled = data.get("sound_enabled") # Check old key
-                if isinstance(old_sound_enabled, bool):
-                    final_config["sound_effects_enabled"] = old_sound_enabled
-                    if DEBUG_MODE: print(f"DEBUG: Migrated 'sound_enabled' to 'sound_effects_enabled' from {filename}.")
-                else:
-                    final_config["sound_effects_enabled"] = default_config["sound_effects_enabled"]
-                    if DEBUG_MODE: print(f"Warning: 'sound_effects_enabled' (and old 'sound_enabled') missing/invalid in {filename}. Using default.")
-
-            # Handle shadow_enabled
-            loaded_shadow = data.get("shadow_enabled")
-            if isinstance(loaded_shadow, bool):
-                final_config["shadow_enabled"] = loaded_shadow
-            else:
-                final_config["shadow_enabled"] = default_config["shadow_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'shadow_enabled' missing/invalid in {filename}. Using default.")
-
-            # Handle line_blink_enabled
-            loaded_line_blink = data.get("line_blink_enabled")
-            if isinstance(loaded_line_blink, bool):
-                final_config["line_blink_enabled"] = loaded_line_blink
-            else:
-                final_config["line_blink_enabled"] = default_config["line_blink_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'line_blink_enabled' missing/invalid in {filename}. Using default.")
-
-            # Handle new music_enabled key
-            loaded_music = data.get("music_enabled")
-            if isinstance(loaded_music, bool):
-                final_config["music_enabled"] = loaded_music
-            else:
-                final_config["music_enabled"] = default_config["music_enabled"]
-                if DEBUG_MODE: print(f"Warning: 'music_enabled' missing/invalid in {filename}. Using default.")
-
-            if DEBUG_MODE: print(f"Config processed from {filename}. Final values: {final_config}")
-            return final_config
-
-    except FileNotFoundError:
-        if DEBUG_MODE: print(f"Info: {filename} not found. Using default config: {default_config}")
-        return default_config.copy()
-    except json.JSONDecodeError:
-        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Using defaults: {default_config}")
-        return default_config.copy()
-    except Exception as e:
-        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Using defaults: {default_config}")
-        return default_config.copy()
-
-def save_config(config_data):
-    filename = "config.json"
-    try:
-        with open(filename, 'w') as f:
-            json.dump(config_data, f, indent=4) # Save with indentation for readability
-        if DEBUG_MODE: print(f"Config saved to {filename}: {config_data}")
-    except IOError as e:
-        if DEBUG_MODE: print(f"Error saving config to {filename}: {e}")
-    except Exception as e: # Catch any other unexpected errors during save
-        if DEBUG_MODE: print(f"An unexpected error occurred while saving config to {filename}: {e}")
+# load_config and save_config are now handled by ConfigManager
 
 def _update_and_save_top_scores(new_score_entry):
     filename = "best_score.json"
@@ -887,40 +811,20 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_s: # Sound Effects Toggle
                     sound_effects_enabled_flag = not sound_effects_enabled_flag
-                    save_config({
-                        "sound_effects_enabled": sound_effects_enabled_flag,
-                        "shadow_enabled": shadow_enabled_flag,
-                        "line_blink_enabled": line_blink_enabled_flag,
-                        "music_enabled": music_enabled_flag
-                    })
-                    if DEBUG_MODE: print(f"Sound Effects setting toggled. New state: {sound_effects_enabled_flag}. Config saved.")
+                    config_manager.set("sound_effects_enabled", sound_effects_enabled_flag)
+                    if DEBUG_MODE: print(f"Sound Effects setting toggled. New state: {sound_effects_enabled_flag}. Config saved via ConfigManager.")
                 elif event.key == pygame.K_m: # Music Toggle
                     music_enabled_flag = not music_enabled_flag
-                    save_config({
-                        "sound_effects_enabled": sound_effects_enabled_flag,
-                        "shadow_enabled": shadow_enabled_flag,
-                        "line_blink_enabled": line_blink_enabled_flag,
-                        "music_enabled": music_enabled_flag
-                    })
-                    if DEBUG_MODE: print(f"Music setting toggled. New state: {music_enabled_flag}. Config saved.")
+                    config_manager.set("music_enabled", music_enabled_flag)
+                    if DEBUG_MODE: print(f"Music setting toggled. New state: {music_enabled_flag}. Config saved via ConfigManager.")
                 elif event.key == pygame.K_d: # Shadow Toggle
                     shadow_enabled_flag = not shadow_enabled_flag
-                    save_config({
-                        "sound_effects_enabled": sound_effects_enabled_flag,
-                        "shadow_enabled": shadow_enabled_flag,
-                        "line_blink_enabled": line_blink_enabled_flag,
-                        "music_enabled": music_enabled_flag
-                    })
-                    if DEBUG_MODE: print(f"Shadow setting toggled. New state: {shadow_enabled_flag}. Config saved.")
+                    config_manager.set("shadow_enabled", shadow_enabled_flag)
+                    if DEBUG_MODE: print(f"Shadow setting toggled. New state: {shadow_enabled_flag}. Config saved via ConfigManager.")
                 elif event.key == pygame.K_b: # Line Blink Toggle
                     line_blink_enabled_flag = not line_blink_enabled_flag
-                    save_config({
-                        "sound_effects_enabled": sound_effects_enabled_flag,
-                        "shadow_enabled": shadow_enabled_flag,
-                        "line_blink_enabled": line_blink_enabled_flag,
-                        "music_enabled": music_enabled_flag
-                    })
-                    if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved.")
+                    config_manager.set("line_blink_enabled", line_blink_enabled_flag)
+                    if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved via ConfigManager.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
@@ -1542,6 +1446,14 @@ def main():
     if args.debug:
         DEBUG_MODE = True
         print("DEBUG MODE ENABLED")
+
+    # Set debug mode for ConfigManager as well
+    set_cm_debug_mode(DEBUG_MODE)
+
+    # Instantiate ConfigManager
+    # Assumes config.json is in the same directory as tetris.py (tetris_android/)
+    config_manager = ConfigManager(config_file_path="config.json")
+
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
     global sound_effects_enabled # Renamed
@@ -1549,17 +1461,14 @@ def main():
     global line_blink_enabled
     global music_enabled         # Added
 
-    # Load configuration
-    loaded_config = load_config() # This now returns a dict with all 4 keys or defaults
+    # Load configuration using ConfigManager
+    loaded_config = config_manager.get_all()
 
     # Initialize module globals from the fully populated loaded_config
-    # Fallback to existing global values (which are module-level defaults) if a key is somehow missing,
-    # though load_config is designed to always provide all keys with their defaults.
-    sound_effects_enabled = loaded_config.get("sound_effects_enabled", sound_effects_enabled)
-    shadow_enabled = loaded_config.get("shadow_enabled", shadow_enabled)
-    line_blink_enabled = loaded_config.get("line_blink_enabled", line_blink_enabled)
-    music_enabled = loaded_config.get("music_enabled", music_enabled)
-    # The isinstance check for loaded_config itself is already handled robustly by load_config returning a default dict.
+    sound_effects_enabled = loaded_config.get("sound_effects_enabled", True) # Default True if somehow missing
+    shadow_enabled = loaded_config.get("shadow_enabled", True)             # Default True
+    line_blink_enabled = loaded_config.get("line_blink_enabled", True)       # Default True
+    music_enabled = loaded_config.get("music_enabled", True)               # Default True
 
     SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
     TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
@@ -1649,7 +1558,8 @@ def main():
             time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time,
             joystick, joystick_enabled, help_screen_active,
             game_phase, current_username_input, config_menu_active,
-            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled # Updated call
+            sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, # Pass to _handle_events
+            config_manager # Pass config_manager instance
         )
 
         running = event_handling_result["running"]
