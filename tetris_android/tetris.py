@@ -1160,9 +1160,27 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         pass # Original text rendering for this phase is removed/commented
 
     elif game_over_flag: # Normal "GAME_OVER" phase (not getting username)
-        # Bypassing text rendering for stability
-        # print("DEBUG: GAME_OVER phase, text rendering bypassed.")
-        pass # Original text rendering for this phase is removed/commented
+        # Ensure GAME_OVER_FONT and INFO_FONT are available (they are global and loaded in main)
+        game_over_text_surf = GAME_OVER_FONT.render("GAME OVER", True, RED)
+        final_score_text = f"Final Score: {score_val}"
+        final_score_surf = INFO_FONT.render(final_score_text, True, WHITE)
+
+        text_rect_game_over = game_over_text_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - final_score_surf.get_height() // 2 - 20))
+        text_rect_score = final_score_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + game_over_text_surf.get_height() // 2))
+
+        screen_surface.blit(game_over_text_surf, text_rect_game_over)
+        screen_surface.blit(final_score_surf, text_rect_score)
+
+        restart_text_surf = INFO_FONT.render("Press 'R' to Restart", True, WHITE)
+        quit_text_surf = INFO_FONT.render("Press 'ESC' to Quit", True, WHITE)
+
+        y_pos_restart = text_rect_score.bottom + 30 # Adjusted spacing
+        text_rect_restart = restart_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_restart + restart_text_surf.get_height() // 2))
+        screen_surface.blit(restart_text_surf, text_rect_restart)
+
+        y_pos_quit = text_rect_restart.bottom + 15 # Adjusted spacing
+        text_rect_quit = quit_text_surf.get_rect(center=(SCREEN_WIDTH // 2, y_pos_quit + quit_text_surf.get_height() // 2))
+        screen_surface.blit(quit_text_surf, text_rect_quit)
 
     # Display PAUSED message if game is paused (and not game over, and help screen not active, and not getting username)
     if game_paused_flag and not game_over_flag and not help_screen_active_flag and not config_menu_active_flag and game_phase_str != "GETTING_USERNAME":
@@ -1250,7 +1268,7 @@ def main():
     shadow_enabled = loaded_config.get("shadow_enabled", True)
     line_blink_enabled = loaded_config.get("line_blink_enabled", True)
 
-    font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+    font_path = None # Use system default font
     SCORE_FONT = pygame.font.Font(font_path, SCORE_FONT_SIZE)
     if SCORE_FONT is None: print("Error: Failed to load SCORE_FONT.")
     INFO_FONT = pygame.font.Font(font_path, INFO_FONT_SIZE)
@@ -1330,6 +1348,12 @@ def main():
      game_over_sound_played, ai_mode_active, last_ai_move_time,
      game_start_time, final_game_time_str, game_paused,
      time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
+
+    # Force game over state for testing
+    game_over = True
+    game_phase = "GAME_OVER" # Ensure it's not 'GETTING_USERNAME' or 'HIGH_SCORE_DISPLAY' for this test
+    score = 1234 # Example score
+    if DEBUG_MODE: print(f"DEBUG: Forcing game over state. game_over={game_over}, game_phase='{game_phase}', score={score}")
 
     running = True
     help_screen_active = False
