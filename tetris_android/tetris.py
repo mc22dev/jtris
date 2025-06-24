@@ -788,12 +788,19 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
             continue
 
         if game_phase_str == "HIGH_SCORE_DISPLAY":
+            current_event_led_to_action = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     local_running_flag = False
-                else:
+                    action_request = "QUIT_GAME"
+                    current_event_led_to_action = True
+                else: # Any other key
                     action_request = "RESTART"
-            if action_request or not local_running_flag: continue
+                    current_event_led_to_action = True
+
+            if current_event_led_to_action: # If this specific KEYDOWN event for HIGH_SCORE_DISPLAY resulted in an action
+                 if DEBUG_MODE: print(f"Debug _handle_events: HIGH_SCORE_DISPLAY action: {action_request}, running: {local_running_flag}")
+                 continue
 
         if game_phase_str == "PLAYING":
             if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
@@ -1423,10 +1430,20 @@ def main():
              game_over_sound_played, ai_mode_active, last_ai_move_time,
              game_start_time, final_game_time_str, game_paused,
              time_at_pause, total_paused_duration) = _unpack_game_state(game_state_dict)
-            formatted_time = ""
-            help_screen_active = False
+
+            # Explicitly reset state variables for restart
             game_phase = "PLAYING"
+            action_request = None # Clear the processed action request
+            help_screen_active = False
+            config_menu_active = False # Ensure this is also reset
             current_username_input = ""
+            lines_being_animated = []
+            line_animation_timer = 0
+            # formatted_time should be reset if it's not naturally reset by game flow,
+            # but it seems to be updated each frame by _update_game_state.
+            # For safety, we can reset it too if it's used before being updated in the new game state.
+            formatted_time = "00:00"
+
             continue
 
         if action_request == "SAVE_SCORE":
