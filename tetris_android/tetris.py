@@ -6,6 +6,7 @@ import copy
 import json
 import argparse
 from .config_manager import ConfigManager, set_debug_mode as set_cm_debug_mode
+from . import constants as game_constants # Import constants module
 from .constants import (
     BLACK, WHITE, CYAN, YELLOW, MAGENTA, GREEN, RED, BLUE, ORANGE, GREY, GARBAGE_COLOR,
     PIECE_COLORS, SHAPES,
@@ -825,6 +826,12 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     line_blink_enabled_flag = not line_blink_enabled_flag
                     config_manager.set("line_blink_enabled", line_blink_enabled_flag)
                     if DEBUG_MODE: print(f"Line Blink setting toggled. New state: {line_blink_enabled_flag}. Config saved via ConfigManager.")
+                elif event.key == pygame.K_g: # Grid Size Toggle
+                    current_grid_size = config_manager.get("grid_size", "normal")
+                    new_grid_size = "large" if current_grid_size == "normal" else "normal"
+                    config_manager.set("grid_size", new_grid_size)
+                    if DEBUG_MODE:
+                        print(f"Grid Size setting toggled to: {new_grid_size}. Restart game for changes to take effect. Config saved.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
@@ -1280,7 +1287,7 @@ def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
     instruction_rect = instruction_surf.get_rect(center=(SCREEN_WIDTH // 2, instruction_y))
     screen_surface.blit(instruction_surf, instruction_rect)
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag): # Signature updated
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, current_grid_config_str): # Signature updated
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
@@ -1419,9 +1426,16 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         line_blink_option_rect = line_blink_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 40)) # Adjusted Y
         screen_surface.blit(line_blink_option_surf, line_blink_option_rect)
 
+        # Grid Size Option Text
+        grid_display_str = current_grid_config_str.capitalize()
+        grid_size_option_text_str = f"Grid Size: {grid_display_str} (Press G to toggle)"
+        grid_size_option_surf = INFO_FONT.render(grid_size_option_text_str, True, WHITE)
+        grid_size_option_rect = grid_size_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80)) # Adjusted Y
+        screen_surface.blit(grid_size_option_surf, grid_size_option_rect)
+
         # Close Menu Hint
         close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
-        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 100)) # Adjusted Y
+        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120)) # Adjusted Y
         screen_surface.blit(close_hint_surf, close_hint_rect)
     elif game_phase_str == "HIGH_SCORE_DISPLAY":
         fonts_for_scores = {
@@ -1453,6 +1467,19 @@ def main():
     # Instantiate ConfigManager
     # Assumes config.json is in the same directory as tetris.py (tetris_android/)
     config_manager = ConfigManager(config_file_path="config.json")
+
+    # Load grid size from config and update constants
+    config_grid_size = config_manager.get("grid_size", "normal")
+    if config_grid_size == "large":
+        game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_LARGE
+        game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_LARGE
+    else:
+        game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_NORMAL
+        game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_NORMAL
+
+    # Re-calculate dependent constants
+    game_constants.GRID_OFFSET_X = (game_constants.SCREEN_WIDTH - game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE) // 2
+    game_constants.GRID_OFFSET_Y = (game_constants.SCREEN_HEIGHT - game_constants.GRID_HEIGHT * game_constants.BLOCK_SIZE) // 2
 
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
@@ -1686,6 +1713,7 @@ def main():
                 if DEBUG_MODE: print(f"DEBUG MainLoop: Not a new top 10 score (Score: {score}). game_phase set to '{game_phase}'.")
 
         # Drawing
+        current_grid_config_for_draw = config_manager.get("grid_size", "normal")
         _draw_game_screen(
             screen, game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, # Pass next_piece_1 and next_piece_2
             total_lines_cleared, lines_for_current_level, ai_mode_active,
@@ -1694,7 +1722,7 @@ def main():
             game_phase, current_username_input, top_scores_list,
             lines_being_animated, line_animation_timer,
             config_menu_active, sound_effects_enabled, shadow_enabled, # Renamed
-            line_blink_enabled, music_enabled # Added
+            line_blink_enabled, music_enabled, current_grid_config_for_draw # Added
         )
 
     if background_music_loaded: # Check if music was loaded

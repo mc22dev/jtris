@@ -6,7 +6,8 @@ DEFAULT_CONFIG = {
     "sound_effects_enabled": True,
     "shadow_enabled": True,
     "line_blink_enabled": True,
-    "music_enabled": True
+    "music_enabled": True,
+    "grid_size": "normal"
 }
 
 CONFIG_FILENAME = "config.json"
@@ -33,11 +34,19 @@ class ConfigManager:
                     # Validate and fill missing keys with defaults
                     loaded_config = DEFAULT_CONFIG.copy()
                     for key in DEFAULT_CONFIG:
-                        if key in data and isinstance(data[key], bool):
-                            loaded_config[key] = data[key]
-                        elif key in data: # Value is not boolean, use default
-                             if DEBUG_MODE:
-                                print(f"Warning: Invalid type for '{key}' in {self.config_file_path}. Using default.")
+                        if key == "grid_size":
+                            if key in data and isinstance(data[key], str) and data[key] in ["normal", "large"]:
+                                loaded_config[key] = data[key]
+                            elif key in data: # Invalid value
+                                if DEBUG_MODE:
+                                    print(f"Warning: Invalid value for '{key}' in {self.config_file_path}. Using default.")
+                            # If key not in data, default is already set
+                        elif key in DEFAULT_CONFIG: # Existing logic for boolean keys
+                            if key in data and isinstance(data[key], bool):
+                                loaded_config[key] = data[key]
+                            elif key in data:
+                                if DEBUG_MODE:
+                                    print(f"Warning: Invalid type for '{key}' in {self.config_file_path}. Using default.")
                         # If key is not in data, default is already set in loaded_config
 
                     # Handle potential old key 'sound_enabled' for backward compatibility
@@ -48,7 +57,6 @@ class ConfigManager:
                                 print(f"DEBUG: Migrated 'sound_enabled' to 'sound_effects_enabled' from {self.config_file_path}.")
                         elif DEBUG_MODE: # Old key present but invalid type
                             print(f"Warning: Invalid type for old key 'sound_enabled' in {self.config_file_path}. Using default for 'sound_effects_enabled'.")
-
 
                     if DEBUG_MODE:
                         print(f"Config loaded from {self.config_file_path}: {loaded_config}")
@@ -72,7 +80,13 @@ class ConfigManager:
 
     def set(self, key, value):
         """Sets a configuration value by key and saves the configuration."""
-        if key in DEFAULT_CONFIG: # Only allow known keys to be set
+        if key == "grid_size":
+            if isinstance(value, str) and value in ["normal", "large"]:
+                self.config[key] = value
+                self.save()
+            elif DEBUG_MODE:
+                print(f"Warning: Invalid value for key '{key}'. Not setting. Must be 'normal' or 'large'.")
+        elif key in DEFAULT_CONFIG: # Existing logic for boolean keys
             if isinstance(value, type(DEFAULT_CONFIG[key])):
                 self.config[key] = value
                 self.save()
@@ -80,7 +94,6 @@ class ConfigManager:
                 print(f"Warning: Invalid type for key '{key}'. Not setting.")
         elif DEBUG_MODE:
             print(f"Warning: Unknown configuration key '{key}'. Not setting.")
-
 
     def save(self):
         """Saves the current configuration to the JSON file."""

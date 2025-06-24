@@ -40,8 +40,14 @@ SHAPES = [
 ]
 
 # Grid dimensions
-GRID_WIDTH = 10
-GRID_HEIGHT = 20
+GRID_WIDTH_NORMAL = 10
+GRID_HEIGHT_NORMAL = 20
+GRID_WIDTH_LARGE = 20
+GRID_HEIGHT_LARGE = 25
+
+# Default to normal size
+GRID_WIDTH = GRID_WIDTH_NORMAL
+GRID_HEIGHT = GRID_HEIGHT_NORMAL
 BLOCK_SIZE = 30 # Main game block size
 NEXT_PIECE_BLOCK_SIZE = 20 # Smaller blocks for next piece display
 
