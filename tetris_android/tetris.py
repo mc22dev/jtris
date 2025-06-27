@@ -414,7 +414,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
             else: # No lines cleared
                 gs.current_piece = gs.next_piece_1
                 if gs.current_piece:
-                gs.current_piece.x = game_constants.GRID_WIDTH // 2
+                    gs.current_piece.x = game_constants.GRID_WIDTH // 2
                     gs.current_piece.y = 0
                     gs.current_piece.is_valid_position = is_valid_position_func
                     gs.current_piece.play_sound = play_sound_func
