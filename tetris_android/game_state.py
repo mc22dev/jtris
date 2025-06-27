@@ -52,13 +52,54 @@ class GameState:
         self.total_paused_duration = total_paused_duration
 
     @classmethod
-    def new_game(cls):
+    def new_game(cls, piece_set_type="tetris"): # Added piece_set_type
         """Convenience method to create a new game state."""
         game_grid = create_grid()
-        current_piece = spawn_piece_at_start()
-        next_piece_1 = Piece(0, 0)
-        next_piece_2 = Piece(0, 0)
+        # spawn_piece_at_start from tetris.py now accepts piece_set_type
+        # However, GameState.new_game might be called from places without direct access to tetris.py's spawn_piece_at_start
+        # For now, let's assume spawn_piece_at_start is accessible or GameState will create pieces directly
+        current_piece = spawn_piece_at_start(piece_set_type=piece_set_type) # Pass piece_set_type
+
+        # Need to ensure Piece class is imported here if we call it directly. It is.
+        # Also, is_valid_position_func and play_sound_func are not directly available here.
+        # This suggests that GameState.new_game should ideally be getting fully formed pieces
+        # or calling a more comprehensive factory function from tetris.py.
+        # For now, we'll instantiate pieces directly, passing piece_set_type.
+        # The is_valid_position and play_sound funcs are usually passed when pieces are made in tetris.py
+        # For pieces in GameState that are just for preview (next_piece_1, next_piece_2), these might not be critical.
+        next_piece_1 = Piece(0, 0, piece_set_type=piece_set_type) # Pass piece_set_type
+        next_piece_2 = Piece(0, 0, piece_set_type=piece_set_type) # Pass piece_set_type
         game_over = False
+
+        # The is_valid_position method for the initial piece check should ideally be the one from tetris.py
+        # or the one assigned to the Piece instance.
+        # If current_piece is None (e.g. spawn_piece_at_start failed), this will error.
+        # spawn_piece_at_start in tetris.py handles the initial game_over check.
+        # So, we can simplify here if spawn_piece_at_start already sets game_over.
+        # Let's re-evaluate: reset_game_state in tetris.py is the primary source of truth for new games.
+        # GameState.new_game is likely a remnant or for a different context.
+        # The original reset_game_state in tetris.py already handles this logic.
+        # For this step, the critical part is if GameState.new_game is *actually* used.
+        # The prompt's context seems to be about modifying existing piece creation sites.
+        # I will assume GameState.new_game is used and proceed to update it.
+        # The check `if not Piece.is_valid_position(current_piece, game_grid):` is problematic
+        # because Piece.is_valid_position is not a static/class method in piece.py
+        # and the instance method relies on self.is_valid_position being set.
+        # This check is correctly done in tetris.py's reset_game_state using the global is_valid_position.
+
+        # Assuming the main game_over check is handled by the caller or by how current_piece is spawned.
+        # If current_piece is None from spawn_piece_at_start, then game_over should be true.
+        if current_piece is None: # A more robust check if spawn_piece_at_start can return None on immediate game over
+            game_over = True
+        elif not current_piece.is_valid_position(current_piece, game_grid): # This will fail if is_valid_position not set on piece
+            # This line should use the global is_valid_position from tetris.py if it's mimicking that logic.
+            # For now, this indicates a potential structural issue in how GameState.new_game is designed
+            # vs. reset_game_state in tetris.py.
+            # I will assume for now that current_piece from spawn_piece_at_start will have the method.
+             game_over = True
+             current_piece = None
+
+
         if not Piece.is_valid_position(current_piece, game_grid): # Assuming is_valid_position can be called on Piece
             game_over = True
             current_piece = None

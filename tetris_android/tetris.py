@@ -140,11 +140,16 @@ def get_full_lines(grid_data):
 
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
-def spawn_piece_at_start(): # Renamed for clarity
-    return Piece(game_constants.GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+def spawn_piece_at_start(piece_set_type="tetris"): # Renamed for clarity
+    return Piece(
+        game_constants.GRID_WIDTH // 2, 0,
+        is_valid_position_func=is_valid_position,
+        play_sound_func=play_sound,
+        piece_set_type=piece_set_type
+    )
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
-def add_garbage_blocks(grid_data, level):
+def add_garbage_blocks(grid_data, level, piece_set_type="tetris"): # Added piece_set_type
     if level < GARBAGE_START_LEVEL: return False
     num_garbage_rows = min(MAX_GARBAGE_ROWS, (level - GARBAGE_START_LEVEL) // 2 + 1)
 
@@ -163,7 +168,12 @@ def add_garbage_blocks(grid_data, level):
         garbage_row = [GARBAGE_COLOR for _ in range(game_constants.GRID_WIDTH)]; hole_position = random.randint(0, game_constants.GRID_WIDTH - 1)
         garbage_row[hole_position] = 0; grid_data[row_index] = garbage_row
 
-    temp_piece_for_check = Piece(game_constants.GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    temp_piece_for_check = Piece(
+        game_constants.GRID_WIDTH // 2, 0,
+        is_valid_position_func=is_valid_position,
+        play_sound_func=play_sound,
+        piece_set_type=piece_set_type # Pass piece_set_type
+    )
     return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
 # --- Time Formatting Function ---
@@ -326,7 +336,8 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func):
         best_move_info = ai_player.find_best_move(
             grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
             is_valid_position_func=is_valid_position_func,
-            play_sound_func=play_sound_func
+            play_sound_func=play_sound_func,
+            piece_set_type=gs.piece_set_type # Pass piece_set_type from game state
         )
 
         if best_move_info and best_move_info['x'] != -1:
@@ -340,7 +351,7 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func):
             gs.game_over = True
         gs.last_ai_move_time = time.time()
 
-def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="tetris"):
     # Animated Hard Drop Logic
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
@@ -375,8 +386,11 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
             if gs.next_piece_1:
                 gs.next_piece_1.is_valid_position = is_valid_position_func
                 gs.next_piece_1.play_sound = play_sound_func
+                # Ensure piece_set_type is set for next_piece_1 if it was just assigned current_piece
+                if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                    gs.next_piece_1.piece_set_type = piece_set_type # Should already be correct via its own init
 
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
 
             if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                 gs.game_over = True
@@ -385,7 +399,7 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
         gs.soft_drop_active = False
     return None
 
-def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag):
+def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="tetris"):
     # Automatic Piece Descent
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
@@ -423,8 +437,11 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
                 if gs.next_piece_1:
                     gs.next_piece_1.is_valid_position = is_valid_position_func
                     gs.next_piece_1.play_sound = play_sound_func
+                    if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                        gs.next_piece_1.piece_set_type = piece_set_type
 
-                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+
+                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
 
                 if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                     gs.game_over = True
@@ -435,7 +452,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
             gs.last_fall_time = time.time()
     return None
 
-def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag):
+def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag, piece_set_type="tetris"):
     # Line Animation Phase
     # Modifies: gs (grid, score, level, etc.), gs.current_piece, gs.next_piece_1, gs.next_piece_2, gs.game_over
     # Returns: updated line_animation_timer_val, lines_being_animated_list, new_game_phase_str
@@ -457,7 +474,7 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
 
         if finalize_result["leveled_up"]:
             gs.current_fall_speed = calculate_fall_speed(gs.current_level)
-            if add_garbage_blocks(gs.game_grid, gs.current_level): # add_garbage_blocks uses global Piece
+            if add_garbage_blocks(gs.game_grid, gs.current_level, piece_set_type=piece_set_type): # Pass piece_set_type
                 gs.game_over = True
                 gs.current_piece = None
 
@@ -473,8 +490,11 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
             if gs.next_piece_1:
                 gs.next_piece_1.is_valid_position = is_valid_position_func
                 gs.next_piece_1.play_sound = play_sound_func
+                if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                    gs.next_piece_1.piece_set_type = piece_set_type
 
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func)
+
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
 
             if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                 gs.game_over = True
@@ -507,7 +527,7 @@ def handle_game_over_inputs(event):
             return "QUIT"
     return None # No relevant action
 
-def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag):
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="tetris"): # Added piece_set_type
     """
     Handles player inputs for controlling the current piece (movement, rotation, drop).
     Assumes current_piece exists, game is not over, AI is not active, and piece is not already hard dropping.
@@ -545,7 +565,13 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
         elif event.key == pygame.K_SPACE: # Initiate Animated Hard Drop
             # Calculate target_y for hard drop by simulating fall until invalid
             original_y = current_piece.y
-            temp_piece_for_calc = Piece(current_piece.x, original_y, shape_type=current_piece.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+            temp_piece_for_calc = Piece(
+                current_piece.x, original_y,
+                shape_type=current_piece.shape_type,
+                is_valid_position_func=is_valid_position,
+                play_sound_func=play_sound,
+                piece_set_type=piece_set_type # Pass piece_set_type
+            )
             temp_piece_for_calc.rotation = current_piece.rotation
             calculated_target_y = original_y
             while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
@@ -564,12 +590,12 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
     return soft_drop_active_flag
 
 # --- Game State Reset Function ---
-def reset_game_state():
+def reset_game_state(piece_set_type="tetris"): # Added piece_set_type argument
     """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
-    current_piece = spawn_piece_at_start() # Already passes functions
-    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
-    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    current_piece = spawn_piece_at_start(piece_set_type=piece_set_type) # Pass piece_set_type
+    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type) # Pass piece_set_type
+    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type) # Pass piece_set_type
 
     game_over = False
     if not is_valid_position(current_piece, game_grid):
@@ -608,10 +634,10 @@ def reset_game_state():
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
-def _handle_restart_action():
+def _handle_restart_action(piece_set_type="tetris"): # Added piece_set_type
     # This function will be responsible for managing the game restart logic.
     # It calls reset_game_state to get a fresh set of game parameters.
-    new_game_state = reset_game_state()
+    new_game_state = reset_game_state(piece_set_type=piece_set_type)
     return new_game_state
 
 def _unpack_game_state(game_state_dict):
@@ -644,6 +670,109 @@ def _unpack_game_state(game_state_dict):
             time_at_pause, total_paused_duration)
 
 # load_config and save_config are now handled by ConfigManager
+
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="tetris"): # Added piece_set_type
+    # Create a GameState object to pass around
+    gs = type('GameState', (), {})() # Simple namespace object for now
+    gs.game_over = game_over_flag
+    gs.ai_mode_active = ai_mode_flag # This was 'ai_mode_flag' in old signature
+    gs.current_piece = current_piece_obj
+    gs.next_piece_1 = next_piece_1_obj
+    gs.next_piece_2 = next_piece_2_obj
+    gs.game_grid = game_grid_data
+    gs.score = score_val
+    gs.current_level = current_level_val
+    gs.total_lines_cleared = total_lines_cleared_val
+    gs.lines_for_current_level = lines_for_current_level_val
+    gs.current_fall_speed = current_fall_speed_val
+    gs.last_fall_time = last_fall_time_val
+    gs.soft_drop_active = soft_drop_flag
+    gs.game_over_sound_played = game_over_sound_played_flag
+    gs.last_ai_move_time = last_ai_move_time_val
+    # game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val are mostly for time display
+    gs.game_paused = game_paused_flag # Added from original signature
+    # piece_set_type is now directly passed to helpers, no need to store in gs explicitly for this if not used otherwise by gs
+    # gs.piece_set_type = piece_set_type
+
+    # Local vars for phase transitions, to be returned
+    current_game_phase = game_phase_str
+    current_lines_being_animated = lines_being_animated_list
+    current_line_animation_timer = line_animation_timer_val
+
+    if current_game_phase == "LINE_ANIMATION":
+        current_line_animation_timer, current_lines_being_animated, current_game_phase = \
+            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag, piece_set_type)
+
+    elif current_game_phase == "PLAYING" and not gs.game_paused:
+        if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+            _process_ai_move(gs, play_sound, is_valid_position) # AI call will be updated later
+            # AI move might set piece to hard drop or cause game over
+
+        # IMPORTANT: Check gs.current_piece again as AI might have made it None (e.g. game over)
+        # or if it completed a hard drop in a theoretical synchronous way (not current design but good check)
+        if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
+            if not gs.game_over: # Don't process if AI already detected game over
+                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
+                if hard_drop_result:
+                    current_game_phase = hard_drop_result['game_phase_str']
+                    current_lines_being_animated = hard_drop_result['lines_being_animated']
+                    current_line_animation_timer = hard_drop_result['line_animation_timer']
+
+        # IMPORTANT: Check gs.current_piece again as hard drop might have cleared lines and set it to None
+        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated: # Note: added elif
+             if not gs.game_over: # Don't process if AI/Hard drop already detected game over
+                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
+                if descent_result:
+                    current_game_phase = descent_result['game_phase_str']
+                    current_lines_being_animated = descent_result['lines_being_animated']
+                    current_line_animation_timer = descent_result['line_animation_timer']
+
+    # --- Game Over State Update (after all game logic for the frame) ---
+    if gs.game_over and not gs.game_over_sound_played:
+        play_sound("game_over")
+        gs.game_over_sound_played = True
+        gs.current_piece = None # Ensure no piece is active
+        if final_game_time_str_val is None: # final_game_time_str_val is from original signature
+            current_elapsed_time = time.time() - game_start_time_val - total_paused_duration_val
+            final_game_time_str_val = format_time(max(0, current_elapsed_time)) # This should be gs.final_game_time_str
+
+    # Determine the time string to display
+    calculated_formatted_time_str = ""
+    if gs.game_over and final_game_time_str_val: # final_game_time_str_val from original signature
+        calculated_formatted_time_str = final_game_time_str_val
+    elif gs.game_paused:
+        # time_at_pause_val and game_start_time_val are from original signature
+        elapsed_at_pause_moment = (time_at_pause_val - game_start_time_val) - total_paused_duration_val
+        calculated_formatted_time_str = format_time(max(0, elapsed_at_pause_moment))
+    else:
+        current_elapsed_seconds = (time.time() - game_start_time_val) - total_paused_duration_val
+        calculated_formatted_time_str = format_time(max(0, current_elapsed_seconds))
+
+    # Return values based on the updated gs and local phase vars
+    return {
+        "game_over": gs.game_over,
+        "current_piece": gs.current_piece,
+        "next_piece_1": gs.next_piece_1,
+        "next_piece_2": gs.next_piece_2,
+        "game_grid": gs.game_grid,
+        "score": gs.score,
+        "current_level": gs.current_level,
+        "total_lines_cleared": gs.total_lines_cleared,
+        "lines_for_current_level": gs.lines_for_current_level,
+        "current_fall_speed": gs.current_fall_speed,
+        "last_fall_time": gs.last_fall_time,
+        "soft_drop_active": gs.soft_drop_active,
+        "game_over_sound_played": gs.game_over_sound_played,
+        "last_ai_move_time": gs.last_ai_move_time,
+        "final_game_time_str": final_game_time_str_val, # from original signature, should be gs.final_game_time_str
+        "formatted_time": calculated_formatted_time_str,
+        "game_phase_str": current_game_phase,
+        "lines_being_animated": current_lines_being_animated,
+        "line_animation_timer": current_line_animation_timer,
+        # For any other gs attributes that might have been in the original return dict implicitly
+        "ai_mode_active": gs.ai_mode_active, # ensure all relevant gs fields are part of the effective return
+        "game_paused": gs.game_paused,
+    }
 
 def _update_and_save_top_scores(new_score_entry):
     filename = "best_score.json"
@@ -833,6 +962,12 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     config_manager.set("grid_size", new_grid_size)
                     if DEBUG_MODE:
                         print(f"Grid Size setting toggled to: {new_grid_size}. Restart game for changes to take effect. Config saved.")
+                elif event.key == pygame.K_k: # 'K' for Kind of pieces / Game Mode
+                    current_gamemode = config_manager.get("gamemode", "tetris")
+                    new_gamemode = "pentomino" if current_gamemode == "tetris" else "tetris"
+                    config_manager.set("gamemode", new_gamemode)
+                    if DEBUG_MODE:
+                        print(f"Gamemode setting toggled to: {new_gamemode}. Restart game recommended. Config saved.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
@@ -920,7 +1055,10 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                 # Player-specific KEYBOARD controls for active play
                 if current_piece_obj and not ai_mode_flag:
                     if DEBUG_MODE: print(f"DEBUG: Event for handle_player_piece_controls: type={event.type}, game_phase='{game_phase_str}', game_paused={game_paused_flag}, help_active={help_screen_active_flag}, ai_active={ai_mode_flag}")
-                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag)
+                    # piece_set_type will need to be passed into _handle_events first
+                    # For now, assuming it's available as current_piece_set_type_local or similar
+                    # This will be fixed when _handle_events signature is updated
+                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "tetris"))
 
                 # Joystick controls for active play (piece movement)
                 if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag:
@@ -960,7 +1098,14 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                                         current_piece_obj.rotate(game_grid_data)
                                     elif button == 1:
                                         original_y = current_piece_obj.y
-                                        temp_piece_for_calc = Piece(current_piece_obj.x, original_y, current_piece_obj.shape_type)
+                                        current_game_mode = config_manager.get("gamemode", "tetris") # Get current game mode
+                                        temp_piece_for_calc = Piece(
+                                            current_piece_obj.x, original_y,
+                                            shape_type=current_piece_obj.shape_type,
+                                            is_valid_position_func=is_valid_position, # Already available
+                                            play_sound_func=play_sound, # Already available
+                                            piece_set_type=current_game_mode
+                                        )
                                         temp_piece_for_calc.rotation = current_piece_obj.rotation
                                         calculated_target_y = original_y
                                         while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)):
@@ -1055,6 +1200,8 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
     gs.last_ai_move_time = last_ai_move_time_val
     # game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val are mostly for time display
     gs.game_paused = game_paused_flag # Added from original signature
+    # piece_set_type is now directly passed to helpers, no need to store in gs explicitly for this if not used otherwise by gs
+    # gs.piece_set_type = piece_set_type
 
     # Local vars for phase transitions, to be returned
     current_game_phase = game_phase_str
@@ -1063,18 +1210,18 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
 
     if current_game_phase == "LINE_ANIMATION":
         current_line_animation_timer, current_lines_being_animated, current_game_phase = \
-            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag)
+            _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag, piece_set_type)
 
     elif current_game_phase == "PLAYING" and not gs.game_paused:
         if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
-            _process_ai_move(gs, play_sound, is_valid_position)
+            _process_ai_move(gs, play_sound, is_valid_position) # AI call will be updated later
             # AI move might set piece to hard drop or cause game over
 
         # IMPORTANT: Check gs.current_piece again as AI might have made it None (e.g. game over)
         # or if it completed a hard drop in a theoretical synchronous way (not current design but good check)
         if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
             if not gs.game_over: # Don't process if AI already detected game over
-                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
                 if hard_drop_result:
                     current_game_phase = hard_drop_result['game_phase_str']
                     current_lines_being_animated = hard_drop_result['lines_being_animated']
@@ -1083,7 +1230,7 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
         # IMPORTANT: Check gs.current_piece again as hard drop might have cleared lines and set it to None
         elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated: # Note: added elif
              if not gs.game_over: # Don't process if AI/Hard drop already detected game over
-                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag)
+                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
                 if descent_result:
                     current_game_phase = descent_result['game_phase_str']
                     current_lines_being_animated = descent_result['lines_being_animated']
@@ -1288,13 +1435,16 @@ def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
     instruction_rect = instruction_surf.get_rect(center=(SCREEN_WIDTH // 2, instruction_y))
     screen_surface.blit(instruction_surf, instruction_rect)
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, current_grid_config_str): # Signature updated
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, current_grid_config_str, config_manager): # Signature updated, added config_manager
     # Drawing
     screen_surface.fill(BLACK) # Always fill screen first
     # Regular game drawing (grid, current piece, main UI)
     draw_grid_lines(screen_surface)
     # Pass line_blink_enabled_flag to draw_blocks
     draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag)
+
+    # Ensure config_manager is available (it's now a parameter)
+    # current_gamemode_str in the config menu part will use this.
 
     # Draw shadow piece before the actual piece
     if shadow_enabled_flag:
@@ -1434,9 +1584,21 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         grid_size_option_rect = grid_size_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80)) # Adjusted Y
         screen_surface.blit(grid_size_option_surf, grid_size_option_rect)
 
+        # Gamemode Option Text (New)
+        current_gamemode_str = config_manager.get("gamemode", "tetris").capitalize() # Get from config_manager which is available in main
+        gamemode_option_text_str = f"Game Mode: {current_gamemode_str} (Press K to toggle)"
+        gamemode_option_surf = INFO_FONT.render(gamemode_option_text_str, True, WHITE)
+        gamemode_option_rect = gamemode_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120)) # Adjusted Y
+        screen_surface.blit(gamemode_option_surf, gamemode_option_rect)
+
+        # Restart Hint (New)
+        restart_hint_surf = INFO_FONT.render("Restart game for some settings to apply.", True, GREY)
+        restart_hint_rect = restart_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150)) # Adjusted Y
+        screen_surface.blit(restart_hint_surf, restart_hint_rect)
+
         # Close Menu Hint
         close_hint_surf = INFO_FONT.render("Press C or ESC to close", True, GREY)
-        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120)) # Adjusted Y
+        close_hint_rect = close_hint_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 180)) # Adjusted Y
         screen_surface.blit(close_hint_surf, close_hint_rect)
     elif game_phase_str == "HIGH_SCORE_DISPLAY":
         fonts_for_scores = {
@@ -1471,12 +1633,29 @@ def main():
 
     # Load grid size from config and update constants
     config_grid_size = config_manager.get("grid_size", "normal")
+    current_gamemode = config_manager.get("gamemode", "tetris") # Get current gamemode
+
     if DEBUG_MODE:
         print(f"DEBUG tetris.main: Loaded grid_size from config: {config_grid_size}")
+        print(f"DEBUG tetris.main: Loaded gamemode from config: {current_gamemode}")
+
+    # If pentomino mode is active, ensure grid size is large.
+    if current_gamemode == "pentomino":
+        if config_grid_size == "normal":
+            if DEBUG_MODE:
+                print(f"DEBUG tetris.main: Pentomino mode active with normal grid. Forcing large grid and saving to config.")
+            config_grid_size = "large"
+            config_manager.set("grid_size", "large") # Persist this change
+        elif DEBUG_MODE: # Pentomino mode, and grid is already large or some other non-normal (though config only supports normal/large)
+             print(f"DEBUG tetris.main: Pentomino mode active with grid_size: {config_grid_size}.")
+
+
     if config_grid_size == "large":
         game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_LARGE
         game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_LARGE
-    else:
+    else: # Default to normal if not large (covers "normal" and any unexpected values)
+        if config_grid_size != "normal" and DEBUG_MODE:
+            print(f"DEBUG tetris.main: Unexpected config_grid_size '{config_grid_size}'. Defaulting to normal.")
         game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_NORMAL
         game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_NORMAL
 
@@ -1565,7 +1744,9 @@ def main():
     clock = pygame.time.Clock() # Moved clock initialization here as it's used by _draw_game_screen
 
     # Initial game state setup
-    game_state_dict = reset_game_state()
+    # Get piece_set_type from config for the initial reset
+    initial_piece_set_type = config_manager.get("gamemode", "tetris")
+    game_state_dict = reset_game_state(piece_set_type=initial_piece_set_type)
     (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
      current_fall_speed, last_fall_time, soft_drop_active,
@@ -1616,6 +1797,11 @@ def main():
         music_enabled = event_handling_result["music_enabled"] # Added
         current_username_input = event_handling_result["current_username_input"]
         # game_phase is now primarily managed by main based on action_request or game_over state changes
+
+        # --- Piece Set Type (Game Mode) ---
+        # This will eventually be loaded from config_manager in main
+        current_piece_set_type = config_manager.get("gamemode", "tetris")
+
 
         # --- Runtime Music Management ---
         if background_music_loaded: # Only manage music if it was loaded successfully
@@ -1673,7 +1859,8 @@ def main():
             game_start_time, final_game_time_str, total_paused_duration, time_at_pause,
             help_screen_active, game_phase,
             lines_being_animated, line_animation_timer, # Existing animation params
-            line_blink_enabled  # Add the new flag here
+            line_blink_enabled,  # Add the new flag here
+            piece_set_type=current_piece_set_type # Pass piece_set_type
         )
 
         game_over = game_logic_result["game_over"]
@@ -1731,7 +1918,8 @@ def main():
             game_phase, current_username_input, top_scores_list,
             lines_being_animated, line_animation_timer,
             config_menu_active, sound_effects_enabled, shadow_enabled, # Renamed
-            line_blink_enabled, music_enabled, current_grid_config_for_draw # Added
+            line_blink_enabled, music_enabled, current_grid_config_for_draw, # Added
+            config_manager # Pass config_manager
         )
 
     if background_music_loaded: # Check if music was loaded

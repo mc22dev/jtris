@@ -7,7 +7,8 @@ DEFAULT_CONFIG = {
     "shadow_enabled": True,
     "line_blink_enabled": True,
     "music_enabled": True,
-    "grid_size": "normal"
+    "grid_size": "normal", # "normal" or "large"
+    "gamemode": "tetris"   # "tetris" or "pentomino"
 }
 
 CONFIG_FILENAME = "config.json"
@@ -41,6 +42,13 @@ class ConfigManager:
                                 if DEBUG_MODE:
                                     print(f"Warning: Invalid value for '{key}' in {self.config_file_path}. Using default.")
                             # If key not in data, default is already set
+                        elif key == "gamemode": # Handle gamemode
+                            if key in data and isinstance(data[key], str) and data[key] in ["tetris", "pentomino"]:
+                                loaded_config[key] = data[key]
+                            elif key in data: # Invalid value for gamemode
+                                if DEBUG_MODE:
+                                    print(f"Warning: Invalid value for '{key}' in {self.config_file_path}. Using default 'tetris'.")
+                            # If key not in data, default ('tetris') is already set
                         elif key in DEFAULT_CONFIG: # Existing logic for boolean keys
                             if key in data and isinstance(data[key], bool):
                                 loaded_config[key] = data[key]
@@ -86,6 +94,12 @@ class ConfigManager:
                 self.save()
             elif DEBUG_MODE:
                 print(f"Warning: Invalid value for key '{key}'. Not setting. Must be 'normal' or 'large'.")
+        elif key == "gamemode": # Handle gamemode
+            if isinstance(value, str) and value in ["tetris", "pentomino"]:
+                self.config[key] = value
+                self.save()
+            elif DEBUG_MODE:
+                print(f"Warning: Invalid value for key '{key}'. Not setting. Must be 'tetris' or 'pentomino'.")
         elif key in DEFAULT_CONFIG: # Existing logic for boolean keys
             if isinstance(value, type(DEFAULT_CONFIG[key])):
                 self.config[key] = value
