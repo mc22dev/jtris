@@ -967,6 +967,14 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     config_manager.set("gamemode", new_gamemode)
                     if DEBUG_MODE:
                         print(f"Gamemode setting toggled to: {new_gamemode}. Restart game recommended. Config saved.")
+
+                    # If switching to pentomino, ensure grid becomes large and save immediately
+                    if new_gamemode == "pentomino":
+                        current_grid_size_config = config_manager.get("grid_size", "normal")
+                        if current_grid_size_config == "normal":
+                            config_manager.set("grid_size", "large")
+                            if DEBUG_MODE:
+                                print(f"DEBUG _handle_events: Gamemode switched to Pentomino, grid_size was normal. Updated and saved grid_size to large.")
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     # Only unpause if help screen is also not active
