@@ -11,8 +11,9 @@ from .constants import (
     BLACK, WHITE, CYAN, YELLOW, MAGENTA, GREEN, RED, BLUE, ORANGE, GREY, GARBAGE_COLOR,
     PIECE_COLORS, SHAPES,
     SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE,
-    GRID_WIDTH, GRID_HEIGHT, BLOCK_SIZE, NEXT_PIECE_BLOCK_SIZE,
-    GRID_OFFSET_X, GRID_OFFSET_Y,
+    # GRID_WIDTH, GRID_HEIGHT, BLOCK_SIZE, # Accessed via game_constants
+    NEXT_PIECE_BLOCK_SIZE,
+    # GRID_OFFSET_X, GRID_OFFSET_Y, # Accessed via game_constants
     UI_INFO_X_OFFSET, UI_INFO_START_Y, UI_INFO_LINE_SPACING, NEXT_PIECE_BOX_SIZE,
     SCORE_FONT_SIZE, INFO_FONT_SIZE, TITLE_FONT_SIZE, GAME_OVER_FONT_SIZE,
     INITIAL_FALL_SPEED, FALL_SPEED_DECREMENT_PER_LEVEL, MIN_FALL_SPEED,
@@ -55,10 +56,10 @@ def play_sound(sound_name):
     if SOUND_EFFECTS.get(sound_name): SOUND_EFFECTS[sound_name].play()
 
 # ... (create_grid, draw_grid_lines, draw_blocks, draw_piece - largely same)
-def create_grid(fill_value=0): return [[fill_value for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
+def create_grid(fill_value=0): return [[fill_value for _ in range(game_constants.GRID_WIDTH)] for _ in range(game_constants.GRID_HEIGHT)]
 def draw_grid_lines(screen):
-    for row in range(GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X, GRID_OFFSET_Y + row * BLOCK_SIZE), (GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE))
-    for col in range(GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y), (GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + GRID_HEIGHT * BLOCK_SIZE))
+    for row in range(game_constants.GRID_HEIGHT + 1): pygame.draw.line(screen, GREY, (game_constants.GRID_OFFSET_X, game_constants.GRID_OFFSET_Y + row * game_constants.BLOCK_SIZE), (game_constants.GRID_OFFSET_X + game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE, game_constants.GRID_OFFSET_Y + row * game_constants.BLOCK_SIZE))
+    for col in range(game_constants.GRID_WIDTH + 1): pygame.draw.line(screen, GREY, (game_constants.GRID_OFFSET_X + col * game_constants.BLOCK_SIZE, game_constants.GRID_OFFSET_Y), (game_constants.GRID_OFFSET_X + col * game_constants.BLOCK_SIZE, game_constants.GRID_OFFSET_Y + game_constants.GRID_HEIGHT * game_constants.BLOCK_SIZE))
 
 def draw_blocks(screen, grid_data, lines_being_animated, animation_timer, line_blink_enabled_flag): # Draws landed blocks
     for r_idx, row in enumerate(grid_data):
@@ -85,20 +86,20 @@ def draw_blocks(screen, grid_data, lines_being_animated, animation_timer, line_b
                         # If blinking is disabled, make blocks in clearing lines disappear immediately
                         current_block_color = BLACK
 
-                pygame.draw.rect(screen, current_block_color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
+                pygame.draw.rect(screen, current_block_color, (game_constants.GRID_OFFSET_X + c_idx * game_constants.BLOCK_SIZE, game_constants.GRID_OFFSET_Y + r_idx * game_constants.BLOCK_SIZE, game_constants.BLOCK_SIZE -1, game_constants.BLOCK_SIZE -1))
 
 def draw_current_piece_on_grid(screen, piece): # Renamed for clarity
     if piece:
         for r_idx, c_idx in piece.current_shape_coords():
             if r_idx >= 0: # Only draw if within visible grid area
-                pygame.draw.rect(screen, piece.color, (GRID_OFFSET_X + c_idx * BLOCK_SIZE, GRID_OFFSET_Y + r_idx * BLOCK_SIZE, BLOCK_SIZE -1, BLOCK_SIZE -1))
+                pygame.draw.rect(screen, piece.color, (game_constants.GRID_OFFSET_X + c_idx * game_constants.BLOCK_SIZE, game_constants.GRID_OFFSET_Y + r_idx * game_constants.BLOCK_SIZE, game_constants.BLOCK_SIZE -1, game_constants.BLOCK_SIZE -1))
 
 def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
     if not piece: return False
     for r_idx, c_idx in piece.current_shape_coords():
         actual_r = r_idx + check_y_offset
-        if not (0 <= c_idx < GRID_WIDTH): return False
-        if not (actual_r < GRID_HEIGHT): return False
+        if not (0 <= c_idx < game_constants.GRID_WIDTH): return False
+        if not (actual_r < game_constants.GRID_HEIGHT): return False
         if actual_r >= 0 and grid_data[actual_r][c_idx] != 0: return False
     return True
 
@@ -132,7 +133,7 @@ def get_shadow_position_y(piece, grid_data):
 def get_full_lines(grid_data):
     full_lines_indices = []
     # Iterate top to bottom to get indices in natural order.
-    for r_idx in range(GRID_HEIGHT):
+    for r_idx in range(game_constants.GRID_HEIGHT):
         if 0 not in grid_data[r_idx]: # Check if line is full
             full_lines_indices.append(r_idx)
     return full_lines_indices
@@ -140,7 +141,7 @@ def get_full_lines(grid_data):
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
 def spawn_piece_at_start(): # Renamed for clarity
-    return Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    return Piece(game_constants.GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
 def add_garbage_blocks(grid_data, level):
@@ -155,14 +156,14 @@ def add_garbage_blocks(grid_data, level):
 
     # Shift existing grid content up by num_garbage_rows
     for _ in range(num_garbage_rows):
-        del grid_data[0]; grid_data.append([0 for _ in range(GRID_WIDTH)])
+        del grid_data[0]; grid_data.append([0 for _ in range(game_constants.GRID_WIDTH)])
 
     for i in range(num_garbage_rows):
-        row_index = GRID_HEIGHT - 1 - i
-        garbage_row = [GARBAGE_COLOR for _ in range(GRID_WIDTH)]; hole_position = random.randint(0, GRID_WIDTH - 1)
+        row_index = game_constants.GRID_HEIGHT - 1 - i
+        garbage_row = [GARBAGE_COLOR for _ in range(game_constants.GRID_WIDTH)]; hole_position = random.randint(0, game_constants.GRID_WIDTH - 1)
         garbage_row[hole_position] = 0; grid_data[row_index] = garbage_row
 
-    temp_piece_for_check = Piece(GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
+    temp_piece_for_check = Piece(game_constants.GRID_WIDTH // 2, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound)
     return not is_valid_position(temp_piece_for_check, grid_data) # True if game over
 
 # --- Time Formatting Function ---
@@ -209,7 +210,7 @@ def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, ne
     if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE) # Load if not already
 
     current_y = UI_INFO_START_Y
-    ui_start_x = GRID_OFFSET_X + GRID_WIDTH * BLOCK_SIZE + UI_INFO_X_OFFSET
+    ui_start_x = game_constants.GRID_OFFSET_X + game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE + UI_INFO_X_OFFSET
 
     score_surface = SCORE_FONT.render(f"Score: {score}", True, WHITE)
     screen.blit(score_surface, (ui_start_x, current_y))
@@ -345,7 +346,7 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
     # Returns: dict for game phase transition if line clear, else None
     # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
-    # LINE_ANIMATION_DURATION, GRID_WIDTH
+    # LINE_ANIMATION_DURATION, game_constants.GRID_WIDTH
     gs.current_piece.y += 1
     if gs.current_piece.y >= gs.current_piece.target_y_for_animated_drop:
         gs.current_piece.y = gs.current_piece.target_y_for_animated_drop
@@ -365,7 +366,7 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
         else: # No lines cleared
             gs.current_piece = gs.next_piece_1
             if gs.current_piece:
-                gs.current_piece.x = GRID_WIDTH // 2
+                gs.current_piece.x = game_constants.GRID_WIDTH // 2
                 gs.current_piece.y = 0
                 gs.current_piece.is_valid_position = is_valid_position_func
                 gs.current_piece.play_sound = play_sound_func
@@ -390,7 +391,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
     # Returns: dict for game phase transition if line clear, else None
     # Dependencies: add_to_grid, get_full_lines, play_sound_func, Piece, is_valid_position_func,
-    # LINE_ANIMATION_DURATION, GRID_WIDTH
+    # LINE_ANIMATION_DURATION, game_constants.GRID_WIDTH
     fall_interval = gs.current_fall_speed
     if gs.soft_drop_active: fall_interval = min(gs.current_fall_speed, 0.05)
 
@@ -413,7 +414,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
             else: # No lines cleared
                 gs.current_piece = gs.next_piece_1
                 if gs.current_piece:
-                    gs.current_piece.x = GRID_WIDTH // 2
+                gs.current_piece.x = game_constants.GRID_WIDTH // 2
                     gs.current_piece.y = 0
                     gs.current_piece.is_valid_position = is_valid_position_func
                     gs.current_piece.play_sound = play_sound_func
@@ -463,7 +464,7 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
         if not gs.game_over:
             gs.current_piece = gs.next_piece_1
             if gs.current_piece:
-                gs.current_piece.x = GRID_WIDTH // 2
+                gs.current_piece.x = game_constants.GRID_WIDTH // 2
                 gs.current_piece.y = 0
                 gs.current_piece.is_valid_position = is_valid_position_func
                 gs.current_piece.play_sound = play_sound_func
@@ -1143,7 +1144,7 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
         del grid_data[r_idx]
 
     for _ in range(num_cleared):
-        grid_data.insert(0, [0 for _ in range(GRID_WIDTH)])
+        grid_data.insert(0, [0 for _ in range(game_constants.GRID_WIDTH)])
 
     current_score += get_score_for_lines(num_cleared, level)
     total_lines += num_cleared
@@ -1309,11 +1310,11 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
                 for r_offset, c_offset in current_piece_obj.shape[current_piece_obj.rotation]:
                     block_r = shadow_y + r_offset
                     block_c = current_piece_obj.x + c_offset
-                    if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
+                    if 0 <= block_r < game_constants.GRID_HEIGHT and 0 <= block_c < game_constants.GRID_WIDTH:
                         pygame.draw.rect(screen_surface, shadow_color, (
-                            GRID_OFFSET_X + block_c * BLOCK_SIZE,
-                            GRID_OFFSET_Y + block_r * BLOCK_SIZE,
-                            BLOCK_SIZE - 1, BLOCK_SIZE - 1))
+                            game_constants.GRID_OFFSET_X + block_c * game_constants.BLOCK_SIZE,
+                            game_constants.GRID_OFFSET_Y + block_r * game_constants.BLOCK_SIZE,
+                            game_constants.BLOCK_SIZE - 1, game_constants.BLOCK_SIZE - 1))
             # Optional: else block for debugging if a non-None piece has bad shape/rotation data
             # else:
             #    if DEBUG_MODE: print(f"DEBUG: Shadow draw for valid piece {current_piece_obj} skipped due to invalid shape/rotation.")
@@ -1470,6 +1471,8 @@ def main():
 
     # Load grid size from config and update constants
     config_grid_size = config_manager.get("grid_size", "normal")
+    if DEBUG_MODE:
+        print(f"DEBUG tetris.main: Loaded grid_size from config: {config_grid_size}")
     if config_grid_size == "large":
         game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_LARGE
         game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_LARGE
@@ -1480,6 +1483,12 @@ def main():
     # Re-calculate dependent constants
     game_constants.GRID_OFFSET_X = (game_constants.SCREEN_WIDTH - game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE) // 2
     game_constants.GRID_OFFSET_Y = (game_constants.SCREEN_HEIGHT - game_constants.GRID_HEIGHT * game_constants.BLOCK_SIZE) // 2
+    if DEBUG_MODE:
+        print(f"DEBUG tetris.main: game_constants.GRID_WIDTH set to: {game_constants.GRID_WIDTH}")
+        print(f"DEBUG tetris.main: game_constants.GRID_HEIGHT set to: {game_constants.GRID_HEIGHT}")
+        print(f"DEBUG tetris.main: game_constants.GRID_OFFSET_X set to: {game_constants.GRID_OFFSET_X}")
+        print(f"DEBUG tetris.main: game_constants.GRID_OFFSET_Y set to: {game_constants.GRID_OFFSET_Y}")
+        print(f"DEBUG tetris.main: BLOCK_SIZE is: {game_constants.BLOCK_SIZE}")
 
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS

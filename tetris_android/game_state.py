@@ -3,8 +3,9 @@ import time
 # This might need adjustment if those are also moved later.
 from .piece import Piece # Changed from .tetris to .piece
 from .tetris import create_grid, spawn_piece_at_start, calculate_fall_speed # Piece removed from here
+from . import constants as game_constants
 from .constants import (
-    GRID_WIDTH, GRID_HEIGHT, INITIAL_FALL_SPEED, MIN_FALL_SPEED, FALL_SPEED_DECREMENT_PER_LEVEL
+    INITIAL_FALL_SPEED, MIN_FALL_SPEED, FALL_SPEED_DECREMENT_PER_LEVEL # GRID_WIDTH, GRID_HEIGHT removed
 )
 
 class GameState:
