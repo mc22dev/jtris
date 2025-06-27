@@ -34,16 +34,19 @@ def _get_cleared_lines_and_new_grid(grid_copy_to_check):
             r -= 1
     return lines_cleared_count, grid_after_clearing
 
-def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation, is_valid_position_func, play_sound_func, piece_set_type="tetris"): # Added piece_set_type
+def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, target_rotation, is_valid_position_func, play_sound_func): # Removed piece_set_type parameter
     """
     Simulates placing a piece at a given x and rotation on a (deep)copy of the grid.
     Performs a hard drop and calculates the outcome.
     """
     sim_grid_current_move = clone_grid(grid_to_simulate_on)
+    if not piece_to_simulate: # Safety check
+        return None, 0, -1, False
+
     temp_piece = Piece(target_x, 0, shape_type=piece_to_simulate.shape_type,
                        is_valid_position_func=is_valid_position_func,
                        play_sound_func=play_sound_func,
-                       piece_set_type=piece_set_type) # Pass piece_set_type
+                       piece_set_type=piece_to_simulate.piece_set_type) # Use piece_to_simulate's type
     temp_piece.rotation = target_rotation
     temp_piece.x = target_x
 
@@ -117,11 +120,13 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
     if not current_piece_obj: # Added safety check
         return {'x': best_x, 'rotation': best_rotation, 'score': best_score, 'landing_y': best_landing_y}
 
+    # The piece_set_type parameter for find_best_move is for the current game mode (e.g. for next piece eval)
+    # For simulating the current_piece_obj, we must use its own piece_set_type.
     for rotation_idx in range(len(current_piece_obj.shape)):
         temp_eval_piece = Piece(0, 0, shape_type=current_piece_obj.shape_type,
                                 is_valid_position_func=is_valid_position_func,
                                 play_sound_func=play_sound_func,
-                                piece_set_type=piece_set_type) # Pass piece_set_type
+                                piece_set_type=current_piece_obj.piece_set_type) # Use current_piece_obj's own type
         temp_eval_piece.rotation = rotation_idx
         current_shape_blocks = temp_eval_piece.shape[temp_eval_piece.rotation]
         min_c_offset_for_shape = 0
@@ -132,8 +137,9 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
 
         for x_col in range(-min_c_offset_for_shape, game_constants.GRID_WIDTH - max_c_offset_for_shape):
             grid_copy = clone_grid(grid_data)
+            # current_piece_obj is passed to simulate_place_piece, which will use its piece_set_type
             resulting_grid, lines_cleared, landing_y, is_possible = \
-                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx, is_valid_position_func, play_sound_func, piece_set_type) # Pass piece_set_type
+                simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx, is_valid_position_func, play_sound_func)
 
             if is_possible:
                 current_move_score = evaluate_board_state(resulting_grid, lines_cleared)
