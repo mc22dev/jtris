@@ -691,8 +691,7 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
     gs.last_ai_move_time = last_ai_move_time_val
     # game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val are mostly for time display
     gs.game_paused = game_paused_flag # Added from original signature
-    # piece_set_type is now directly passed to helpers (gs.piece_set_type could be used if needed within gs object itself for other purposes)
-    # For clarity, ensure piece_set_type from the function signature is used when calling helpers.
+    gs.piece_set_type = piece_set_type # Ensure piece_set_type is an attribute of gs for _process_ai_move
 
     # Local vars for phase transitions, to be returned
     current_game_phase = game_phase_str
