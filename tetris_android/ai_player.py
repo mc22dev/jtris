@@ -1,5 +1,5 @@
 from .piece import Piece
-from .constants import GRID_WIDTH, GRID_HEIGHT
+from . import constants as game_constants
 
 HEURISTIC_WEIGHTS = {
     'aggregate_height': -0.510066,
@@ -19,17 +19,17 @@ def _get_cleared_lines_and_new_grid(grid_copy_to_check):
     """
     lines_cleared_count = 0
     grid_after_clearing = [row[:] for row in grid_copy_to_check]
-    r = GRID_HEIGHT - 1
+    r = game_constants.GRID_HEIGHT - 1
     while r >= 0:
         is_line_full = True
-        for c in range(GRID_WIDTH):
+        for c in range(game_constants.GRID_WIDTH):
             if grid_after_clearing[r][c] == 0:
                 is_line_full = False
                 break
         if is_line_full:
             lines_cleared_count += 1
             del grid_after_clearing[r]
-            grid_after_clearing.insert(0, [0 for _ in range(GRID_WIDTH)])
+            grid_after_clearing.insert(0, [0 for _ in range(game_constants.GRID_WIDTH)])
         else:
             r -= 1
     return lines_cleared_count, grid_after_clearing
@@ -63,7 +63,7 @@ def simulate_place_piece(grid_to_simulate_on, piece_to_simulate, target_x, targe
 
     for r_offset, c_offset in current_shape_blocks:
         block_r, block_c = landing_y + r_offset, temp_piece.x + c_offset
-        if 0 <= block_r < GRID_HEIGHT and 0 <= block_c < GRID_WIDTH:
+        if 0 <= block_r < game_constants.GRID_HEIGHT and 0 <= block_c < game_constants.GRID_WIDTH:
             sim_grid_current_move[block_r][block_c] = temp_piece.color
 
     lines_cleared, grid_after_clear = _get_cleared_lines_and_new_grid(sim_grid_current_move)
@@ -76,20 +76,20 @@ def evaluate_board_state(grid, lines_cleared_by_move):
     """
     score = 0
     aggregate_height = 0
-    column_heights = [0] * GRID_WIDTH
-    for c in range(GRID_WIDTH):
-        for r in range(GRID_HEIGHT):
+    column_heights = [0] * game_constants.GRID_WIDTH
+    for c in range(game_constants.GRID_WIDTH):
+        for r in range(game_constants.GRID_HEIGHT):
             if grid[r][c] != 0:
-                column_heights[c] = GRID_HEIGHT - r
+                column_heights[c] = game_constants.GRID_HEIGHT - r
                 break
         aggregate_height += column_heights[c]
     score += HEURISTIC_WEIGHTS['aggregate_height'] * aggregate_height
     score += HEURISTIC_WEIGHTS['cleared_lines'] * lines_cleared_by_move
 
     holes = 0
-    for c in range(GRID_WIDTH):
+    for c in range(game_constants.GRID_WIDTH):
         block_above_found = False
-        for r in range(GRID_HEIGHT):
+        for r in range(game_constants.GRID_HEIGHT):
             if grid[r][c] != 0:
                 block_above_found = True
             elif block_above_found and grid[r][c] == 0:
@@ -97,7 +97,7 @@ def evaluate_board_state(grid, lines_cleared_by_move):
     score += HEURISTIC_WEIGHTS['holes'] * holes
 
     bumpiness = 0
-    for c in range(GRID_WIDTH - 1):
+    for c in range(game_constants.GRID_WIDTH - 1):
         bumpiness += abs(column_heights[c] - column_heights[c+1])
     score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
     return score
@@ -121,7 +121,7 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
             min_c_offset_for_shape = min(c for r,c in current_shape_blocks)
             max_c_offset_for_shape = max(c for r,c in current_shape_blocks)
 
-        for x_col in range(-min_c_offset_for_shape, GRID_WIDTH - max_c_offset_for_shape):
+        for x_col in range(-min_c_offset_for_shape, game_constants.GRID_WIDTH - max_c_offset_for_shape):
             grid_copy = clone_grid(grid_data)
             resulting_grid, lines_cleared, landing_y, is_possible = \
                 simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx, is_valid_position_func, play_sound_func)
