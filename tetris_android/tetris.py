@@ -326,7 +326,7 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
 # --- Input Handling Sub-functions ---
 
 # Helper functions for _update_game_state
-def _process_ai_move(gs, play_sound_func, is_valid_position_func):
+def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="tetris"): # Added piece_set_type parameter
     # AI Player Decision Logic
     # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
     # gs.soft_drop_active are modified here.
@@ -337,7 +337,7 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func):
             grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
             is_valid_position_func=is_valid_position_func,
             play_sound_func=play_sound_func,
-            piece_set_type=gs.piece_set_type # Pass piece_set_type from game state
+            piece_set_type=piece_set_type # Use piece_set_type from parameters
         )
 
         if best_move_info and best_move_info['x'] != -1:
@@ -704,7 +704,7 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
 
     elif current_game_phase == "PLAYING" and not gs.game_paused:
         if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
-            _process_ai_move(gs, play_sound, is_valid_position) # AI call will be updated later
+            _process_ai_move(gs, play_sound, is_valid_position, piece_set_type) # Pass piece_set_type directly
             # AI move might set piece to hard drop or cause game over
 
         # IMPORTANT: Check gs.current_piece again as AI might have made it None (e.g. game over)
