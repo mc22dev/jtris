@@ -671,7 +671,7 @@ def _unpack_game_state(game_state_dict):
 
 # load_config and save_config are now handled by ConfigManager
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="tetris"): # Added piece_set_type
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="tetris"):
     # Create a GameState object to pass around
     gs = type('GameState', (), {})() # Simple namespace object for now
     gs.game_over = game_over_flag
@@ -691,8 +691,8 @@ def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_p
     gs.last_ai_move_time = last_ai_move_time_val
     # game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val are mostly for time display
     gs.game_paused = game_paused_flag # Added from original signature
-    # piece_set_type is now directly passed to helpers, no need to store in gs explicitly for this if not used otherwise by gs
-    # gs.piece_set_type = piece_set_type
+    # piece_set_type is now directly passed to helpers (gs.piece_set_type could be used if needed within gs object itself for other purposes)
+    # For clarity, ensure piece_set_type from the function signature is used when calling helpers.
 
     # Local vars for phase transitions, to be returned
     current_game_phase = game_phase_str
