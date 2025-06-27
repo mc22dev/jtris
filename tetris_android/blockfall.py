@@ -36,8 +36,8 @@ DEBUG_MODE = False
 # SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT are initialized in main()
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
-SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "tetris_clear": None, "level_up": None, "game_over": None}
-SOUND_DIR = "sounds" # Specific to asset loading in tetris.py
+    SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "blockfall_clear": None, "level_up": None, "game_over": None}
+    SOUND_DIR = "sounds" # Specific to asset loading in blockfall.py
 sound_effects_enabled = True # Renamed from sound_enabled
 shadow_enabled = True
 line_blink_enabled = True
@@ -100,7 +100,8 @@ def is_valid_position(piece, grid_data, check_y_offset=0): # For main game piece
         actual_r = r_idx + check_y_offset
         if not (0 <= c_idx < game_constants.GRID_WIDTH): return False
         if not (actual_r < game_constants.GRID_HEIGHT): return False
-        if actual_r >= 0 and grid_data[actual_r][c_idx] != 0: return False
+        # Ensure actual_r is within the grid bounds before accessing grid_data[actual_r]
+        if 0 <= actual_r < game_constants.GRID_HEIGHT and grid_data[actual_r][c_idx] != 0: return False
     return True
 
 def add_to_grid(piece, grid_data):
@@ -140,7 +141,7 @@ def get_full_lines(grid_data):
 
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
-def spawn_piece_at_start(piece_set_type="tetris"): # Renamed for clarity
+def spawn_piece_at_start(piece_set_type="BlockFall"): # Renamed for clarity
     return Piece(
         game_constants.GRID_WIDTH // 2, 0,
         is_valid_position_func=is_valid_position,
@@ -149,7 +150,7 @@ def spawn_piece_at_start(piece_set_type="tetris"): # Renamed for clarity
     )
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
-def add_garbage_blocks(grid_data, level, piece_set_type="tetris"): # Added piece_set_type
+def add_garbage_blocks(grid_data, level, piece_set_type="BlockFall"): # Added piece_set_type
     if level < GARBAGE_START_LEVEL: return False
     num_garbage_rows = min(MAX_GARBAGE_ROWS, (level - GARBAGE_START_LEVEL) // 2 + 1)
 
@@ -326,7 +327,7 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
 # --- Input Handling Sub-functions ---
 
 # Helper functions for _update_game_state
-def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="tetris"): # Added piece_set_type parameter
+def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="BlockFall"): # Added piece_set_type parameter
     # AI Player Decision Logic
     # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
     # gs.soft_drop_active are modified here.
@@ -351,7 +352,7 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type
             gs.game_over = True
         gs.last_ai_move_time = time.time()
 
-def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="tetris"):
+def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="BlockFall"):
     # Animated Hard Drop Logic
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
@@ -366,7 +367,7 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
 
         cleared_row_indices = get_full_lines(gs.game_grid)
         if cleared_row_indices:
-            if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
+            if len(cleared_row_indices) == 4: play_sound_func("blockfall_clear")
             elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
             gs.current_piece = None # Piece locked, wait for animation
             return {
@@ -399,7 +400,7 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
         gs.soft_drop_active = False
     return None
 
-def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="tetris"):
+def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="BlockFall"):
     # Automatic Piece Descent
     # Modifies: gs.current_piece, gs.game_grid, gs.next_piece_1, gs.next_piece_2,
     # gs.last_fall_time, gs.soft_drop_active, gs.game_over
@@ -417,7 +418,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
 
             cleared_row_indices = get_full_lines(gs.game_grid)
             if cleared_row_indices:
-                if len(cleared_row_indices) == 4: play_sound_func("tetris_clear")
+                if len(cleared_row_indices) == 4: play_sound_func("blockfall_clear")
                 elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
                 gs.current_piece = None # Piece locked, wait for animation
                 return {
@@ -452,7 +453,7 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
             gs.last_fall_time = time.time()
     return None
 
-def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag, piece_set_type="tetris"):
+def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag, piece_set_type="BlockFall"):
     # Line Animation Phase
     # Modifies: gs (grid, score, level, etc.), gs.current_piece, gs.next_piece_1, gs.next_piece_2, gs.game_over
     # Returns: updated line_animation_timer_val, lines_being_animated_list, new_game_phase_str
@@ -527,7 +528,7 @@ def handle_game_over_inputs(event):
             return "QUIT"
     return None # No relevant action
 
-def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="tetris"): # Added piece_set_type
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="BlockFall"): # Added piece_set_type
     """
     Handles player inputs for controlling the current piece (movement, rotation, drop).
     Assumes current_piece exists, game is not over, AI is not active, and piece is not already hard dropping.
@@ -590,7 +591,7 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
     return soft_drop_active_flag
 
 # --- Game State Reset Function ---
-def reset_game_state(piece_set_type="tetris"): # Added piece_set_type argument
+def reset_game_state(piece_set_type="BlockFall"): # Added piece_set_type argument
     """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
     current_piece = spawn_piece_at_start(piece_set_type=piece_set_type) # Pass piece_set_type
@@ -634,7 +635,7 @@ def reset_game_state(piece_set_type="tetris"): # Added piece_set_type argument
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
-def _handle_restart_action(piece_set_type="tetris"): # Added piece_set_type
+def _handle_restart_action(piece_set_type="BlockFall"): # Added piece_set_type
     # This function will be responsible for managing the game restart logic.
     # It calls reset_game_state to get a fresh set of game parameters.
     new_game_state = reset_game_state(piece_set_type=piece_set_type)
@@ -671,7 +672,7 @@ def _unpack_game_state(game_state_dict):
 
 # load_config and save_config are now handled by ConfigManager
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="tetris"):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="BlockFall"):
     # Create a GameState object to pass around
     gs = type('GameState', (), {})() # Simple namespace object for now
     gs.game_over = game_over_flag
@@ -962,8 +963,8 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     if DEBUG_MODE:
                         print(f"Grid Size setting toggled to: {new_grid_size}. Restart game for changes to take effect. Config saved.")
                 elif event.key == pygame.K_k: # 'K' for Kind of pieces / Game Mode
-                    current_gamemode = config_manager.get("gamemode", "tetris")
-                    new_gamemode = "pentomino" if current_gamemode == "tetris" else "tetris"
+                    current_gamemode = config_manager.get("gamemode", "BlockFall")
+                    new_gamemode = "pentomino" if current_gamemode == "BlockFall" else "BlockFall"
                     config_manager.set("gamemode", new_gamemode)
                     if DEBUG_MODE:
                         print(f"Gamemode setting toggled to: {new_gamemode}. Restart game recommended. Config saved.")
@@ -1187,7 +1188,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         "game_phase_str": game_phase_str
     }
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="tetris"): # Added piece_set_type
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="BlockFall"): # Added piece_set_type
     # Create a GameState object to pass around
     gs = type('GameState', (), {})() # Simple namespace object for now
     gs.game_over = game_over_flag
@@ -1322,7 +1323,7 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
 
 def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
     help_lines_data = [
-        ("TETRIS - HELP", title_font),
+        ("BlockFall - HELP", title_font),
         ("", section_font), # Spacer
         ("Keyboard Controls:", section_font),
         ("  Left Arrow:  Move Piece Left", info_font),
@@ -1622,7 +1623,7 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
 
 def main():
     # --- Argument Parsing ---
-    parser = argparse.ArgumentParser(description="Tetris Game with an AI player option.")
+    parser = argparse.ArgumentParser(description="BlockFall Game with an AI player option.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console.")
     args = parser.parse_args()
 
@@ -1635,26 +1636,26 @@ def main():
     set_cm_debug_mode(DEBUG_MODE)
 
     # Instantiate ConfigManager
-    # Assumes config.json is in the same directory as tetris.py (tetris_android/)
+    # Assumes config.json is in the same directory as blockfall.py (blockfall_android/)
     config_manager = ConfigManager(config_file_path="config.json")
 
     # Load grid size from config and update constants
     config_grid_size = config_manager.get("grid_size", "normal")
-    current_gamemode = config_manager.get("gamemode", "tetris") # Get current gamemode
+    current_gamemode = config_manager.get("gamemode", "BlockFall") # Get current gamemode
 
     if DEBUG_MODE:
-        print(f"DEBUG tetris.main: Loaded grid_size from config: {config_grid_size}")
-        print(f"DEBUG tetris.main: Loaded gamemode from config: {current_gamemode}")
+        print(f"DEBUG blockfall.main: Loaded grid_size from config: {config_grid_size}")
+        print(f"DEBUG blockfall.main: Loaded gamemode from config: {current_gamemode}")
 
     # If pentomino mode is active, ensure grid size is large.
     if current_gamemode == "pentomino":
         if config_grid_size == "normal":
             if DEBUG_MODE:
-                print(f"DEBUG tetris.main: Pentomino mode active with normal grid. Forcing large grid and saving to config.")
+                print(f"DEBUG blockfall.main: Pentomino mode active with normal grid. Forcing large grid and saving to config.")
             config_grid_size = "large"
             config_manager.set("grid_size", "large") # Persist this change
         elif DEBUG_MODE: # Pentomino mode, and grid is already large or some other non-normal (though config only supports normal/large)
-             print(f"DEBUG tetris.main: Pentomino mode active with grid_size: {config_grid_size}.")
+             print(f"DEBUG blockfall.main: Pentomino mode active with grid_size: {config_grid_size}.")
 
 
     if config_grid_size == "large":
@@ -1662,7 +1663,7 @@ def main():
         game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_LARGE
     else: # Default to normal if not large (covers "normal" and any unexpected values)
         if config_grid_size != "normal" and DEBUG_MODE:
-            print(f"DEBUG tetris.main: Unexpected config_grid_size '{config_grid_size}'. Defaulting to normal.")
+            print(f"DEBUG blockfall.main: Unexpected config_grid_size '{config_grid_size}'. Defaulting to normal.")
         game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_NORMAL
         game_constants.GRID_HEIGHT = game_constants.GRID_HEIGHT_NORMAL
 
@@ -1670,11 +1671,11 @@ def main():
     game_constants.GRID_OFFSET_X = (game_constants.SCREEN_WIDTH - game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE) // 2
     game_constants.GRID_OFFSET_Y = (game_constants.SCREEN_HEIGHT - game_constants.GRID_HEIGHT * game_constants.BLOCK_SIZE) // 2
     if DEBUG_MODE:
-        print(f"DEBUG tetris.main: game_constants.GRID_WIDTH set to: {game_constants.GRID_WIDTH}")
-        print(f"DEBUG tetris.main: game_constants.GRID_HEIGHT set to: {game_constants.GRID_HEIGHT}")
-        print(f"DEBUG tetris.main: game_constants.GRID_OFFSET_X set to: {game_constants.GRID_OFFSET_X}")
-        print(f"DEBUG tetris.main: game_constants.GRID_OFFSET_Y set to: {game_constants.GRID_OFFSET_Y}")
-        print(f"DEBUG tetris.main: BLOCK_SIZE is: {game_constants.BLOCK_SIZE}")
+        print(f"DEBUG blockfall.main: game_constants.GRID_WIDTH set to: {game_constants.GRID_WIDTH}")
+        print(f"DEBUG blockfall.main: game_constants.GRID_HEIGHT set to: {game_constants.GRID_HEIGHT}")
+        print(f"DEBUG blockfall.main: game_constants.GRID_OFFSET_X set to: {game_constants.GRID_OFFSET_X}")
+        print(f"DEBUG blockfall.main: game_constants.GRID_OFFSET_Y set to: {game_constants.GRID_OFFSET_Y}")
+        print(f"DEBUG blockfall.main: BLOCK_SIZE is: {game_constants.BLOCK_SIZE}")
 
     # --- End Argument Parsing ---
     global SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT, SOUND_EFFECTS
@@ -1723,7 +1724,7 @@ def main():
     else:
         SOUND_EFFECTS["move"]=load_sound("move.wav"); SOUND_EFFECTS["rotate"]=load_sound("rotate.wav")
         SOUND_EFFECTS["drop"]=load_sound("drop.wav"); SOUND_EFFECTS["line_clear"]=load_sound("line_clear.wav")
-        SOUND_EFFECTS["tetris_clear"]=load_sound("tetris_clear.wav"); SOUND_EFFECTS["level_up"]=load_sound("level_up.wav")
+        SOUND_EFFECTS["blockfall_clear"]=load_sound("blockfall_clear.wav"); SOUND_EFFECTS["level_up"]=load_sound("level_up.wav")
         SOUND_EFFECTS["game_over"]=load_sound("game_over.wav")
 
     # --- Initial Music Playback ---
@@ -1752,7 +1753,7 @@ def main():
 
     # Initial game state setup
     # Get piece_set_type from config for the initial reset
-    initial_piece_set_type = config_manager.get("gamemode", "tetris")
+    initial_piece_set_type = config_manager.get("gamemode", "BlockFall")
     game_state_dict = reset_game_state(piece_set_type=initial_piece_set_type)
     (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
@@ -1807,7 +1808,7 @@ def main():
 
         # --- Piece Set Type (Game Mode) ---
         # This will eventually be loaded from config_manager in main
-        current_piece_set_type = config_manager.get("gamemode", "tetris")
+        current_piece_set_type = config_manager.get("gamemode", "BlockFall")
 
 
         # --- Runtime Music Management ---

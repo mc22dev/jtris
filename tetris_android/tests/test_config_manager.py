@@ -1,7 +1,7 @@
 import unittest
 import os
 import json
-from tetris_android.config_manager import ConfigManager, DEFAULT_CONFIG
+from blockfall_android.config_manager import ConfigManager, DEFAULT_CONFIG
 
 # Define a temporary config file name for testing
 TEST_CONFIG_FILENAME = "test_config.json"
@@ -19,7 +19,7 @@ class TestConfigManager(unittest.TestCase):
         # Instantiate ConfigManager with the test file path
         self.config_manager = ConfigManager(config_file_path=TEST_CONFIG_FILE_PATH)
         # Ensure DEBUG_MODE in config_manager is off for these tests unless specified
-        from tetris_android import config_manager as cm_module
+        from blockfall_android import config_manager as cm_module
         cm_module.DEBUG_MODE = False
 
 

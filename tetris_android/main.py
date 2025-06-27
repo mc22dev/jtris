@@ -1,5 +1,5 @@
 # pgs4a entry point
-from . import tetris
+from . import blockfall
 
 if __name__ == '__main__':
-    tetris.main()
+    blockfall.main()
