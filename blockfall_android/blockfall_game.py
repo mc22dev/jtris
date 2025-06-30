@@ -116,7 +116,10 @@ def get_full_lines(grid_data):
 def get_score_for_lines(lines_cleared, level): base_score = {1:40,2:100,3:300,4:1200}; return base_score.get(lines_cleared,0)*level
 
 def spawn_piece_at_start(piece_set_type="standard"):
-    return Piece(game_constants.GRID_WIDTH//2,0,is_valid_position,play_sound,piece_set_type)
+    return Piece(game_constants.GRID_WIDTH//2, 0,
+                 is_valid_position_func=is_valid_position,
+                 play_sound_func=play_sound,
+                 piece_set_type=piece_set_type)
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED,INITIAL_FALL_SPEED-(level-1)*FALL_SPEED_DECREMENT_PER_LEVEL)
 
@@ -129,7 +132,13 @@ def add_garbage_blocks(grid_data, level, piece_set_type="standard"):
     for i in range(num_garbage_rows):
         row_idx = game_constants.GRID_HEIGHT-1-i; garbage_row = [GARBAGE_COLOR]*game_constants.GRID_WIDTH
         garbage_row[random.randint(0,game_constants.GRID_WIDTH-1)]=0; grid_data[row_idx]=garbage_row
-    return not is_valid_position(Piece(game_constants.GRID_WIDTH//2,0,is_valid_position,play_sound,piece_set_type),grid_data)
+    temp_piece_for_check = Piece(
+        game_constants.GRID_WIDTH // 2, 0,
+        is_valid_position_func=is_valid_position,
+        play_sound_func=play_sound,
+        piece_set_type=piece_set_type
+    )
+    return not is_valid_position(temp_piece_for_check, grid_data)
 
 def format_time(s): m=int(s//60); s=int(s%60); return f"{m:02d}:{s:02d}"
 
@@ -242,7 +251,10 @@ def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, lin
                 gs.next_piece_1.play_sound = play_sound_func
                 if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
                     gs.next_piece_1.piece_set_type = piece_set_type
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+            gs.next_piece_2 = Piece(0, 0,
+                                    is_valid_position_func=is_valid_position_func,
+                                    play_sound_func=play_sound_func,
+                                    piece_set_type=piece_set_type)
             if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                 gs.game_over = True
                 gs.current_piece = None
@@ -281,7 +293,10 @@ def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_bli
                     gs.next_piece_1.play_sound = play_sound_func
                     if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
                         gs.next_piece_1.piece_set_type = piece_set_type
-                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+                gs.next_piece_2 = Piece(0, 0,
+                                        is_valid_position_func=is_valid_position_func,
+                                        play_sound_func=play_sound_func,
+                                        piece_set_type=piece_set_type)
                 if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                     gs.game_over = True
                     gs.current_piece = None
@@ -322,7 +337,10 @@ def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_an
                 gs.next_piece_1.play_sound = play_sound_func
                 if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
                     gs.next_piece_1.piece_set_type = piece_set_type
-            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+            gs.next_piece_2 = Piece(0, 0,
+                                    is_valid_position_func=is_valid_position_func,
+                                    play_sound_func=play_sound_func,
+                                    piece_set_type=piece_set_type)
             if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
                 gs.game_over = True
                 gs.current_piece = None
@@ -363,9 +381,10 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
             soft_drop_active_flag = True
         elif event.key == pygame.K_SPACE:
             original_y = current_piece.y
+            # This call was already using keyword arguments correctly for optional ones.
             temp_piece_for_calc = Piece(
                 current_piece.x, original_y,
-                shape_type=current_piece.shape_type,
+                shape_type=current_piece.shape_type, # This is correct, assuming current_piece.shape_type is an int
                 is_valid_position_func=is_valid_position,
                 play_sound_func=play_sound,
                 piece_set_type=piece_set_type
@@ -386,8 +405,14 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
 def reset_game_state(piece_set_type="standard"):
     game_grid = create_grid()
     current_piece = spawn_piece_at_start(piece_set_type=piece_set_type)
-    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type)
-    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type)
+    next_piece_1 = Piece(0, 0,
+                         is_valid_position_func=is_valid_position,
+                         play_sound_func=play_sound,
+                         piece_set_type=piece_set_type)
+    next_piece_2 = Piece(0, 0,
+                         is_valid_position_func=is_valid_position,
+                         play_sound_func=play_sound,
+                         piece_set_type=piece_set_type)
     game_over = False
     if not is_valid_position(current_piece, game_grid):
         game_over = True
@@ -471,7 +496,6 @@ def _update_and_save_top_scores(new_score_entry):
         with open(filename, 'w') as f: json.dump(current_top_scores[:10], f, indent=4)
     except Exception as e: print(f"Error saving scores: {e}")
 
-# Restored _load_best_score function
 def _load_best_score():
     filename = "best_score.json"
     default_scores_list = []
@@ -796,3 +820,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+[end of blockfall_android/blockfall_game.py]
