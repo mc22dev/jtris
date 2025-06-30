@@ -557,8 +557,14 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                 elif event.key == pygame.K_b: line_blink_enabled_flag = not line_blink_enabled_flag; config_manager.set("line_blink_enabled", line_blink_enabled_flag)
                 elif event.key == pygame.K_g: config_manager.set("grid_size", "large" if config_manager.get("grid_size", "normal") == "normal" else "normal")
                 elif event.key == pygame.K_k:
-                    new_mode = "pentomino" if config_manager.get("gamemode", "standard") == "standard" else "standard"; config_manager.set("gamemode", new_mode)
-                    if new_mode == "pentomino" and config_manager.get("grid_size", "normal") == "normal": config_manager.set("grid_size", "large")
+                    current_mode = config_manager.get("gamemode", "standard")
+                    new_mode = "pentomino" if current_mode == "standard" else "standard"
+                    config_manager.set("gamemode", new_mode)
+                    # If switching to pentomino, ensure grid is large enough
+                    if new_mode == "pentomino" and config_manager.get("grid_size", "normal") == "normal":
+                        config_manager.set("grid_size", "large")
+                    # Request a game restart to apply the new mode
+                    action_request = "RESTART_CONFIG_CHANGE"
                 elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
                     config_menu_active_flag = False
                     if not help_screen_active_flag: game_paused_flag = False; total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
@@ -780,10 +786,38 @@ def main():
             elif not music_enabled and pygame.mixer.music.get_busy(): pygame.mixer.music.pause()
         if not running: break
 
-        if action_request == "RESTART":
+        if action_request == "RESTART" or action_request == "RESTART_CONFIG_CHANGE":
+            # Ensure config changes are applied before resetting game state
+            if action_request == "RESTART_CONFIG_CHANGE":
+                config_grid_size = config_manager.get("grid_size", "normal")
+                if config_grid_size == "large":
+                    game_constants.GRID_WIDTH, game_constants.GRID_HEIGHT = game_constants.GRID_WIDTH_LARGE, game_constants.GRID_HEIGHT_LARGE
+                else:
+                    game_constants.GRID_WIDTH, game_constants.GRID_HEIGHT = game_constants.GRID_WIDTH_NORMAL, game_constants.GRID_HEIGHT_NORMAL
+                game_constants.GRID_OFFSET_X = (game_constants.SCREEN_WIDTH - game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE) // 2
+                game_constants.GRID_OFFSET_Y = (game_constants.SCREEN_HEIGHT - game_constants.GRID_HEIGHT * game_constants.BLOCK_SIZE) // 2
+                # Close config menu and unpause
+                config_menu_active = False
+                if not help_screen_active: # only unpause if help is not active
+                    game_paused = False
+                    if time_at_pause > 0: # Finalize pause duration if it was active
+                        total_paused_duration += time.time() - time_at_pause
+                        time_at_pause = 0
+
+
             game_state_vars = reset_game_state(current_piece_set_type)
             (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, total_lines_cleared, lines_for_current_level, game_over, current_fall_speed, last_fall_time, soft_drop_active, game_over_sound_played, ai_mode_active, last_ai_move_time, game_start_time, final_game_time_str, game_paused, time_at_pause, total_paused_duration) = _unpack_game_state(game_state_vars)
-            formatted_time = ""; help_screen_active = False; game_phase = "PLAYING"; current_username_input = ""; lines_being_animated = []; line_animation_timer = 0
+            # Reset more UI/state variables
+            formatted_time = ""; game_phase = "PLAYING"; current_username_input = ""; lines_being_animated = []; line_animation_timer = 0
+            # If it was a config change restart, ensure game isn't paused due to menu being open previously
+            if action_request == "RESTART_CONFIG_CHANGE" and not help_screen_active:
+                 game_paused = False
+                 last_fall_time, last_ai_move_time = time.time(), time.time()
+
+
+            # Ensure help_screen_active is not reset if it was the reason for pause
+            # help_screen_active = False # This line was causing help to close on mode change.
+
             action_request = None
             continue
 
