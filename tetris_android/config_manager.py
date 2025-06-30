@@ -89,12 +89,8 @@ class ConfigManager:
     def set(self, key, value):
         """Sets a configuration value by key and saves the configuration."""
         if key == "grid_size":
-            print(f"[TEMP_DEBUG] ConfigManager.set: Received key='{key}', value='{value}'") # TEMP DEBUG
             if isinstance(value, str) and value in ["normal", "large"]:
-                print(f"[TEMP_DEBUG] ConfigManager.set: grid_size PRE-UPDATE: self.config.get('grid_size') = {self.config.get('grid_size')}") # TEMP DEBUG
                 self.config[key] = value
-                print(f"[TEMP_DEBUG] ConfigManager.set: grid_size POST-UPDATE: self.config['grid_size'] = {self.config['grid_size']}") # TEMP DEBUG
-                print(f"[TEMP_DEBUG] ConfigManager.set: Calling self.save() for grid_size.") # TEMP DEBUG
                 self.save()
             elif DEBUG_MODE:
                 print(f"Warning: Invalid value for key '{key}'. Not setting. Must be 'normal' or 'large'.")
@@ -115,10 +111,6 @@ class ConfigManager:
 
     def save(self):
         """Saves the current configuration to the JSON file."""
-        if "grid_size" in self.config: # TEMP DEBUG
-            print(f"[TEMP_DEBUG] ConfigManager.save: Attempting to save config. current self.config['grid_size'] = {self.config['grid_size']}") # TEMP DEBUG
-        else: # TEMP DEBUG
-            print(f"[TEMP_DEBUG] ConfigManager.save: Attempting to save config. 'grid_size' key NOT in self.config.") # TEMP DEBUG
         try:
             with open(self.config_file_path, 'w') as f:
                 json.dump(self.config, f, indent=4)

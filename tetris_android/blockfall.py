@@ -1641,22 +1641,17 @@ def main():
 
     # Load grid size from config and update constants
     config_grid_size = config_manager.get("grid_size", "normal")
-    current_gamemode = config_manager.get("gamemode", "BlockFall") # Get current gamemode
+    # current_gamemode = config_manager.get("gamemode", "BlockFall") # current_gamemode is loaded for debug print, but its logic for grid_size override is removed.
 
     if DEBUG_MODE:
         print(f"DEBUG blockfall.main: Loaded grid_size from config: {config_grid_size}")
-        print(f"DEBUG blockfall.main: Loaded gamemode from config: {current_gamemode}")
+        # The gamemode is still relevant for piece sets, just not for overriding grid_size here.
+        current_gamemode_debug = config_manager.get("gamemode", "BlockFall")
+        print(f"DEBUG blockfall.main: Loaded gamemode from config: {current_gamemode_debug}")
 
-    # If pentomino mode is active, ensure grid size is large.
-    if current_gamemode == "pentomino":
-        if config_grid_size == "normal":
-            if DEBUG_MODE:
-                print(f"DEBUG blockfall.main: Pentomino mode active with normal grid. Forcing large grid and saving to config.")
-            config_grid_size = "large"
-            config_manager.set("grid_size", "large") # Persist this change
-        elif DEBUG_MODE: # Pentomino mode, and grid is already large or some other non-normal (though config only supports normal/large)
-             print(f"DEBUG blockfall.main: Pentomino mode active with grid_size: {config_grid_size}.")
-
+    # REMOVED: Redundant logic that forced grid_size to "large" on startup if gamemode was "pentomino".
+    # This override is now handled only when gamemode is actively switched in the config menu (_handle_events).
+    # The config_grid_size loaded above will now be respected directly.
 
     if config_grid_size == "large":
         game_constants.GRID_WIDTH = game_constants.GRID_WIDTH_LARGE
