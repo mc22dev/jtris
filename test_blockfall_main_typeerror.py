@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Adjust path to import from blockfall_android, assuming script is in project root /app
+# Adjust path to import from tetris_android, assuming script is in project root /app
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 # MockEvent class definition
@@ -36,7 +36,7 @@ expected_error_if_unfixed = "_handle_events() takes 22 positional arguments but 
 
 try:
     # Import blockfall module here to catch initialization errors (like pygame.mixer.init)
-    from blockfall_android import blockfall
+    from tetris_android import blockfall
     blockfall_module = blockfall # Store for use in mock_pygame_event_get
 
     # Store original pygame.event.get and assign mock AFTER blockfall (and its pygame) is imported
