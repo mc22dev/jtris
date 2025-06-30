@@ -117,9 +117,12 @@ class ConfigManager:
             if DEBUG_MODE:
                 print(f"Config saved to {self.config_file_path}: {self.config}")
         except IOError as e:
-            if DEBUG_MODE:
-                print(f"Error saving config to {self.config_file_path}: {e}")
+            # Always print IOError, as this is critical for config saving
+            print(f"ERROR: Could not save configuration to {self.config_file_path}: {e}")
+            if DEBUG_MODE: # Additional debug info if in debug mode
+                print(f"Full details for IOError: {e}")
         except Exception as e:
+            # For other unexpected errors, print if in debug mode
             if DEBUG_MODE:
                 print(f"An unexpected error occurred while saving config to {self.config_file_path}: {e}")
 
