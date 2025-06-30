@@ -41,12 +41,12 @@ def load_font(size):
     font_name = "DejaVuSans.ttf"
     try:
         return pygame.font.Font(font_name, size)
-    except pygame.error as e:
+    except (pygame.error, FileNotFoundError) as e:
         if DEBUG_MODE:
             print(f"DEBUG: Font '{font_name}' not found or failed to load: {e}. Falling back to system default.")
         try:
             return pygame.font.SysFont(None, size)
-        except pygame.error as e_sys:
+        except pygame.error as e_sys: # Pygame errors during SysFont are still pygame.error
             if DEBUG_MODE:
                 print(f"DEBUG: System default font also failed to load: {e_sys}. Returning None.")
             return None # Should ideally not happen if Pygame font is initialized
