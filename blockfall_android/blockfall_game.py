@@ -193,9 +193,401 @@ def draw_level_progress_bar(s,curr,needed,rect,colors,font,txt_color):
     if 'border' in colors: pygame.draw.rect(s,colors['border'],rect,1)
     if font: txt_surf=font.render(f"Progress: {curr}/{needed}",True,txt_color); s.blit(txt_surf,(rect.centerx-txt_surf.get_width()//2, rect.y-txt_surf.get_height()-2))
 
-# ... (rest of the functions like _process_ai_move, _process_animated_hard_drop, etc. would follow)
-# For brevity, I'm assuming these functions are largely unchanged from the previous version provided,
-# as the UnboundLocalError is specific to the main game loop's event handling.
+def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="standard"):
+    if time.time() - gs.last_ai_move_time > AI_MOVE_DELAY:
+        grid_copy_for_ai = ai_player.clone_grid(gs.game_grid)
+        best_move_info = ai_player.find_best_move(
+            grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
+            is_valid_position_func=is_valid_position_func,
+            play_sound_func=play_sound_func,
+            piece_set_type=piece_set_type
+        )
+        if best_move_info and best_move_info['x'] != -1:
+            gs.current_piece.rotation = best_move_info['rotation']
+            gs.current_piece.x = best_move_info['x']
+            gs.current_piece.target_y_for_animated_drop = best_move_info['landing_y']
+            gs.current_piece.is_hard_dropping_animated = True
+            gs.soft_drop_active = False
+        else:
+            if DEBUG_MODE: print("AI: No valid moves found by find_best_move. Setting game over.")
+            gs.game_over = True
+        gs.last_ai_move_time = time.time()
+
+def _process_animated_hard_drop(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="BlockFall"):
+    gs.current_piece.y += 1
+    if gs.current_piece.y >= gs.current_piece.target_y_for_animated_drop:
+        gs.current_piece.y = gs.current_piece.target_y_for_animated_drop
+        gs.current_piece.is_hard_dropping_animated = False
+        add_to_grid(gs.current_piece, gs.game_grid)
+        cleared_row_indices = get_full_lines(gs.game_grid)
+        if cleared_row_indices:
+            if len(cleared_row_indices) == 4: play_sound_func("blockfall_clear")
+            elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
+            gs.current_piece = None
+            return {
+                'game_phase_str': "LINE_ANIMATION",
+                'lines_being_animated': cleared_row_indices,
+                'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
+            }
+        else:
+            gs.current_piece = gs.next_piece_1
+            if gs.current_piece:
+                gs.current_piece.x = game_constants.GRID_WIDTH // 2
+                gs.current_piece.y = 0
+                gs.current_piece.is_valid_position = is_valid_position_func
+                gs.current_piece.play_sound = play_sound_func
+            gs.next_piece_1 = gs.next_piece_2
+            if gs.next_piece_1:
+                gs.next_piece_1.is_valid_position = is_valid_position_func
+                gs.next_piece_1.play_sound = play_sound_func
+                if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                    gs.next_piece_1.piece_set_type = piece_set_type
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                gs.game_over = True
+                gs.current_piece = None
+        gs.last_fall_time = time.time()
+        gs.soft_drop_active = False
+    return None
+
+def _process_piece_descent(gs, play_sound_func, is_valid_position_func, line_blink_enabled_flag, piece_set_type="BlockFall"):
+    fall_interval = gs.current_fall_speed
+    if gs.soft_drop_active: fall_interval = min(gs.current_fall_speed, 0.05)
+    if time.time() - gs.last_fall_time > fall_interval:
+        gs.current_piece.y += 1
+        if not is_valid_position_func(gs.current_piece, gs.game_grid):
+            gs.current_piece.y -= 1
+            add_to_grid(gs.current_piece, gs.game_grid)
+            cleared_row_indices = get_full_lines(gs.game_grid)
+            if cleared_row_indices:
+                if len(cleared_row_indices) == 4: play_sound_func("blockfall_clear")
+                elif len(cleared_row_indices) > 0: play_sound_func("line_clear")
+                gs.current_piece = None
+                return {
+                    'game_phase_str': "LINE_ANIMATION",
+                    'lines_being_animated': cleared_row_indices,
+                    'line_animation_timer': LINE_ANIMATION_DURATION if line_blink_enabled_flag else 1
+                }
+            else:
+                gs.current_piece = gs.next_piece_1
+                if gs.current_piece:
+                    gs.current_piece.x = game_constants.GRID_WIDTH // 2
+                    gs.current_piece.y = 0
+                    gs.current_piece.is_valid_position = is_valid_position_func
+                    gs.current_piece.play_sound = play_sound_func
+                gs.next_piece_1 = gs.next_piece_2
+                if gs.next_piece_1:
+                    gs.next_piece_1.is_valid_position = is_valid_position_func
+                    gs.next_piece_1.play_sound = play_sound_func
+                    if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                        gs.next_piece_1.piece_set_type = piece_set_type
+                gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+                if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                    gs.game_over = True
+                    gs.current_piece = None
+            gs.last_fall_time = time.time()
+            gs.soft_drop_active = False
+        else:
+            gs.last_fall_time = time.time()
+    return None
+
+def _process_line_animation(gs, play_sound_func, is_valid_position_func, line_animation_timer_val, lines_being_animated_list, line_blink_enabled_flag, piece_set_type="BlockFall"):
+    line_animation_timer_val -= 1
+    new_game_phase_str = "LINE_ANIMATION"
+    if line_animation_timer_val <= 0:
+        finalize_result = _finalize_line_clear(
+            gs.game_grid, lines_being_animated_list,
+            gs.score, gs.current_level, gs.total_lines_cleared, gs.lines_for_current_level
+        )
+        gs.game_grid = finalize_result["grid_data"]
+        gs.score = finalize_result["current_score"]
+        gs.current_level = finalize_result["level"]
+        gs.total_lines_cleared = finalize_result["total_lines"]
+        gs.lines_for_current_level = finalize_result["lines_for_lvl"]
+        if finalize_result["leveled_up"]:
+            gs.current_fall_speed = calculate_fall_speed(gs.current_level)
+            if add_garbage_blocks(gs.game_grid, gs.current_level, piece_set_type=piece_set_type):
+                gs.game_over = True
+                gs.current_piece = None
+        if not gs.game_over:
+            gs.current_piece = gs.next_piece_1
+            if gs.current_piece:
+                gs.current_piece.x = game_constants.GRID_WIDTH // 2
+                gs.current_piece.y = 0
+                gs.current_piece.is_valid_position = is_valid_position_func
+                gs.current_piece.play_sound = play_sound_func
+            gs.next_piece_1 = gs.next_piece_2
+            if gs.next_piece_1:
+                gs.next_piece_1.is_valid_position = is_valid_position_func
+                gs.next_piece_1.play_sound = play_sound_func
+                if hasattr(gs.next_piece_1, 'piece_set_type') and gs.next_piece_1.piece_set_type != piece_set_type:
+                    gs.next_piece_1.piece_set_type = piece_set_type
+            gs.next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position_func, play_sound_func=play_sound_func, piece_set_type=piece_set_type)
+            if gs.current_piece and not is_valid_position_func(gs.current_piece, gs.game_grid):
+                gs.game_over = True
+                gs.current_piece = None
+        lines_being_animated_list = []
+        new_game_phase_str = "PLAYING"
+        gs.last_fall_time = time.time()
+    return line_animation_timer_val, lines_being_animated_list, new_game_phase_str
+
+def handle_game_over_inputs(event):
+    if event.type == pygame.QUIT:
+        return "QUIT"
+    if event.type == pygame.KEYDOWN:
+        if event.key == RESTART_KEY:
+            return "RESTART"
+        if event.key == pygame.K_ESCAPE:
+            return "QUIT"
+    return None
+
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="standard"):
+    if event.type == pygame.KEYDOWN:
+        if current_piece.is_hard_dropping_animated:
+            return soft_drop_active_flag
+        if event.key == pygame.K_UP:
+            current_piece.rotate(game_grid)
+        elif event.key == pygame.K_LEFT:
+            current_piece.x -= 1
+            if not is_valid_position(current_piece, game_grid):
+                current_piece.x += 1
+            else:
+                play_sound("move")
+        elif event.key == pygame.K_RIGHT:
+            current_piece.x += 1
+            if not is_valid_position(current_piece, game_grid):
+                current_piece.x -= 1
+            else:
+                play_sound("move")
+        elif event.key == pygame.K_DOWN:
+            soft_drop_active_flag = True
+        elif event.key == pygame.K_SPACE:
+            original_y = current_piece.y
+            temp_piece_for_calc = Piece(
+                current_piece.x, original_y,
+                shape_type=current_piece.shape_type,
+                is_valid_position_func=is_valid_position,
+                play_sound_func=play_sound,
+                piece_set_type=piece_set_type
+            )
+            temp_piece_for_calc.rotation = current_piece.rotation
+            calculated_target_y = original_y
+            while is_valid_position(temp_piece_for_calc, game_grid, check_y_offset=(calculated_target_y - original_y + 1)):
+                calculated_target_y += 1
+            current_piece.target_y_for_animated_drop = calculated_target_y
+            current_piece.is_hard_dropping_animated = True
+            soft_drop_active_flag = False
+    elif event.type == pygame.KEYUP:
+        if event.key == pygame.K_DOWN:
+            if not current_piece.is_hard_dropping_animated:
+                 soft_drop_active_flag = False
+    return soft_drop_active_flag
+
+def reset_game_state(piece_set_type="standard"):
+    game_grid = create_grid()
+    current_piece = spawn_piece_at_start(piece_set_type=piece_set_type)
+    next_piece_1 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type)
+    next_piece_2 = Piece(0, 0, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=piece_set_type)
+    game_over = False
+    if not is_valid_position(current_piece, game_grid):
+        game_over = True
+        current_piece = None
+    score = 0; current_level = 1; total_lines_cleared = 0; lines_for_current_level = 0
+    current_fall_speed = calculate_fall_speed(current_level)
+    last_fall_time = time.time(); soft_drop_active = False; game_over_sound_played = False
+    ai_mode_active = False; last_ai_move_time = time.time()
+    game_start_time = time.time(); final_game_time_str = None
+    game_paused = False; time_at_pause = 0.0; total_paused_duration = 0.0
+    return {
+        "game_grid": game_grid, "current_piece": current_piece,
+        "next_piece_1": next_piece_1, "next_piece_2": next_piece_2,
+        "score": score, "current_level": current_level, "total_lines_cleared": total_lines_cleared,
+        "lines_for_current_level": lines_for_current_level, "game_over": game_over,
+        "current_fall_speed": current_fall_speed, "last_fall_time": last_fall_time,
+        "soft_drop_active": soft_drop_active, "game_over_sound_played": game_over_sound_played,
+        "ai_mode_active": ai_mode_active, "last_ai_move_time": last_ai_move_time,
+        "game_start_time": game_start_time, "final_game_time_str": final_game_time_str,
+        "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
+    }
+
+def _handle_restart_action(piece_set_type="standard"):
+    new_game_state = reset_game_state(piece_set_type=piece_set_type)
+    return new_game_state
+
+def _unpack_game_state(game_state_dict):
+    return (game_state_dict["game_grid"], game_state_dict["current_piece"],
+            game_state_dict["next_piece_1"], game_state_dict["next_piece_2"],
+            game_state_dict["score"], game_state_dict["current_level"],
+            game_state_dict["total_lines_cleared"], game_state_dict["lines_for_current_level"],
+            game_state_dict["game_over"], game_state_dict["current_fall_speed"],
+            game_state_dict["last_fall_time"], game_state_dict["soft_drop_active"],
+            game_state_dict["game_over_sound_played"], game_state_dict["ai_mode_active"],
+            game_state_dict["last_ai_move_time"], game_state_dict["game_start_time"],
+            game_state_dict["final_game_time_str"], game_state_dict["game_paused"],
+            game_state_dict["time_at_pause"], game_state_dict["total_paused_duration"])
+
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="standard"):
+    gs = type('GameState', (), {})()
+    gs.game_over = game_over_flag; gs.ai_mode_active = ai_mode_flag; gs.current_piece = current_piece_obj
+    gs.next_piece_1 = next_piece_1_obj; gs.next_piece_2 = next_piece_2_obj; gs.game_grid = game_grid_data
+    gs.score = score_val; gs.current_level = current_level_val; gs.total_lines_cleared = total_lines_cleared_val
+    gs.lines_for_current_level = lines_for_current_level_val; gs.current_fall_speed = current_fall_speed_val
+    gs.last_fall_time = last_fall_time_val; gs.soft_drop_active = soft_drop_flag
+    gs.game_over_sound_played = game_over_sound_played_flag; gs.last_ai_move_time = last_ai_move_time_val
+    gs.game_paused = game_paused_flag; gs.piece_set_type = piece_set_type
+    current_game_phase = game_phase_str; current_lines_being_animated = lines_being_animated_list; current_line_animation_timer = line_animation_timer_val
+    if current_game_phase == "LINE_ANIMATION":
+        current_line_animation_timer, current_lines_being_animated, current_game_phase = _process_line_animation(gs, play_sound, is_valid_position, current_line_animation_timer, current_lines_being_animated, line_blink_enabled_flag, piece_set_type)
+    elif current_game_phase == "PLAYING" and not gs.game_paused:
+        if gs.ai_mode_active and gs.current_piece and not gs.current_piece.is_hard_dropping_animated: _process_ai_move(gs, play_sound, is_valid_position, piece_set_type)
+        if gs.current_piece and gs.current_piece.is_hard_dropping_animated:
+            if not gs.game_over:
+                hard_drop_result = _process_animated_hard_drop(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
+                if hard_drop_result: current_game_phase, current_lines_being_animated, current_line_animation_timer = hard_drop_result['game_phase_str'], hard_drop_result['lines_being_animated'], hard_drop_result['line_animation_timer']
+        elif gs.current_piece and not gs.current_piece.is_hard_dropping_animated:
+             if not gs.game_over:
+                descent_result = _process_piece_descent(gs, play_sound, is_valid_position, line_blink_enabled_flag, piece_set_type)
+                if descent_result: current_game_phase, current_lines_being_animated, current_line_animation_timer = descent_result['game_phase_str'], descent_result['lines_being_animated'], descent_result['line_animation_timer']
+    if gs.game_over and not gs.game_over_sound_played:
+        play_sound("game_over"); gs.game_over_sound_played = True; gs.current_piece = None
+        if final_game_time_str_val is None: final_game_time_str_val = format_time(max(0, time.time() - game_start_time_val - total_paused_duration_val))
+    calculated_formatted_time_str = final_game_time_str_val if gs.game_over and final_game_time_str_val else format_time(max(0, (time_at_pause_val - game_start_time_val) - total_paused_duration_val)) if gs.game_paused else format_time(max(0, (time.time() - game_start_time_val) - total_paused_duration_val))
+    return {"game_over": gs.game_over, "current_piece": gs.current_piece, "next_piece_1": gs.next_piece_1, "next_piece_2": gs.next_piece_2, "game_grid": gs.game_grid, "score": gs.score, "current_level": gs.current_level, "total_lines_cleared": gs.total_lines_cleared, "lines_for_current_level": gs.lines_for_current_level, "current_fall_speed": gs.current_fall_speed, "last_fall_time": gs.last_fall_time, "soft_drop_active": gs.soft_drop_active, "game_over_sound_played": gs.game_over_sound_played, "last_ai_move_time": gs.last_ai_move_time, "final_game_time_str": final_game_time_str_val, "formatted_time": calculated_formatted_time_str, "game_phase_str": current_game_phase, "lines_being_animated": current_lines_being_animated, "line_animation_timer": current_line_animation_timer, "ai_mode_active": gs.ai_mode_active, "game_paused": gs.game_paused}
+
+def _update_and_save_top_scores(new_score_entry):
+    filename = "best_score.json"; current_top_scores = []
+    try:
+        with open(filename, 'r') as f:
+            loaded_data = json.load(f)
+            if isinstance(loaded_data, list):
+                for entry in loaded_data:
+                    if isinstance(entry, dict) and all(k in entry for k in ["username", "score", "time_str"]) and isinstance(entry["username"], str) and isinstance(entry["score"], int) and isinstance(entry["time_str"], str): current_top_scores.append(entry)
+                    elif DEBUG_MODE: print(f"Skipping invalid entry: {entry}")
+    except FileNotFoundError: pass
+    except Exception as e: print(f"Error loading scores: {e}")
+    current_top_scores.append(new_score_entry)
+    current_top_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
+    try:
+        with open(filename, 'w') as f: json.dump(current_top_scores[:10], f, indent=4)
+    except Exception as e: print(f"Error saving scores: {e}")
+
+# Restored _load_best_score function
+def _load_best_score():
+    filename = "best_score.json"
+    default_scores_list = []
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            if not isinstance(data, list):
+                if DEBUG_MODE: print(f"Warning: {filename} content is not a list. Returning empty list.")
+                return default_scores_list
+            valid_scores = []
+            for entry in data:
+                if isinstance(entry, dict) and \
+                   "username" in entry and isinstance(entry["username"], str) and \
+                   "score" in entry and isinstance(entry["score"], int) and \
+                   "time_str" in entry and isinstance(entry["time_str"], str):
+                    valid_scores.append(entry)
+                else:
+                    if DEBUG_MODE: print(f"Warning: Invalid score entry found in {filename}: {entry}. Skipping.")
+            valid_scores.sort(key=lambda x: x.get("score", 0), reverse=True)
+            top_10_scores = valid_scores[:10]
+            if DEBUG_MODE: print(f"Top scores loaded from {filename}: {top_10_scores}")
+            return top_10_scores
+    except FileNotFoundError:
+        if DEBUG_MODE: print(f"Info: {filename} not found. Returning empty list.")
+        return default_scores_list
+    except json.JSONDecodeError:
+        if DEBUG_MODE: print(f"Warning: Error decoding {filename}. File might be corrupted. Returning empty list.")
+        return default_scores_list
+    except Exception as e:
+        if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Returning empty list.")
+        return default_scores_list
+
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, config_manager):
+    action_request = None
+    for event in events:
+        if event.type == pygame.QUIT: running_flag = False; continue
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
+            help_screen_active_flag = not help_screen_active_flag
+            if help_screen_active_flag: game_paused_flag = True; time_at_pause_val = time.time() if not game_paused_flag else time_at_pause_val
+            else:
+                if not config_menu_active_flag: game_paused_flag = False; total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+            continue
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_c:
+            config_menu_active_flag = not config_menu_active_flag
+            if config_menu_active_flag: game_paused_flag = True; time_at_pause_val = time.time() if not game_paused_flag else time_at_pause_val
+            else:
+                if not help_screen_active_flag: game_paused_flag = False; total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+            continue
+        if help_screen_active_flag and event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            help_screen_active_flag = False
+            if not config_menu_active_flag: game_paused_flag = False; total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+            continue
+        if help_screen_active_flag: continue
+        if config_menu_active_flag:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s: sound_effects_enabled_flag = not sound_effects_enabled_flag; config_manager.set("sound_effects_enabled", sound_effects_enabled_flag)
+                elif event.key == pygame.K_m: music_enabled_flag = not music_enabled_flag; config_manager.set("music_enabled", music_enabled_flag)
+                elif event.key == pygame.K_d: shadow_enabled_flag = not shadow_enabled_flag; config_manager.set("shadow_enabled", shadow_enabled_flag)
+                elif event.key == pygame.K_b: line_blink_enabled_flag = not line_blink_enabled_flag; config_manager.set("line_blink_enabled", line_blink_enabled_flag)
+                elif event.key == pygame.K_g: config_manager.set("grid_size", "large" if config_manager.get("grid_size", "normal") == "normal" else "normal")
+                elif event.key == pygame.K_k:
+                    new_mode = "pentomino" if config_manager.get("gamemode", "standard") == "standard" else "standard"; config_manager.set("gamemode", new_mode)
+                    if new_mode == "pentomino" and config_manager.get("grid_size", "normal") == "normal": config_manager.set("grid_size", "large")
+                elif event.key == pygame.K_ESCAPE or event.key == pygame.K_c:
+                    config_menu_active_flag = False
+                    if not help_screen_active_flag: game_paused_flag = False; total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+            continue
+        if game_phase_str == "HIGH_SCORE_DISPLAY":
+            if event.type == pygame.KEYDOWN: action_request = "RESTART" if event.key != pygame.K_ESCAPE else None; running_flag = False if event.key == pygame.K_ESCAPE else running_flag
+            if event.type == pygame.QUIT: running_flag = False
+            continue
+        elif game_phase_str == "GETTING_USERNAME":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN: action_request = "SAVE_SCORE" if current_username_str else "SKIP_SAVE"
+                elif event.key == pygame.K_ESCAPE: action_request = "SKIP_SAVE"
+                elif event.key == pygame.K_BACKSPACE: current_username_str = current_username_str[:-1]
+                elif len(current_username_str) < 15 and event.unicode.isalnum(): current_username_str += event.unicode.upper()
+            continue
+        elif game_phase_str == "PLAYING":
+            if event.type == pygame.KEYDOWN and event.key == PAUSE_KEY:
+                game_paused_flag = not game_paused_flag
+                if game_paused_flag: time_at_pause_val = time.time()
+                else:
+                    if not help_screen_active_flag and not config_menu_active_flag: total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+                continue
+            if not game_paused_flag:
+                if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY: ai_mode_flag = not ai_mode_flag; last_ai_move_time_val = time.time() if ai_mode_flag else last_ai_move_time_val; soft_drop_flag = False if ai_mode_flag else soft_drop_flag; current_piece_obj.is_hard_dropping_animated = False if ai_mode_flag and current_piece_obj else current_piece_obj.is_hard_dropping_animated if current_piece_obj else False ; continue
+                if current_piece_obj and not ai_mode_flag: soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "standard"))
+                if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag :
+                    if event.type == pygame.JOYAXISMOTION and event.joy == joystick_obj.get_id() and not current_piece_obj.is_hard_dropping_animated:
+                        if event.axis == 0: current_piece_obj.x += 1 if event.value > 0.5 else -1 if event.value < -0.5 else 0; play_sound("move") if not is_valid_position(current_piece_obj, game_grid_data) and (current_piece_obj.x_position_backup(),False) else None
+                        elif event.axis == 1: soft_drop_flag = True if event.value > 0.5 else False
+                    elif event.type == pygame.JOYHATMOTION and event.joy == joystick_obj.get_id() and not current_piece_obj.is_hard_dropping_animated:
+                        hat_x, hat_y = event.value; current_piece_obj.x += hat_x; play_sound("move") if not is_valid_position(current_piece_obj, game_grid_data) and (current_piece_obj.x_position_backup(),False) else None
+                        if hat_y == -1: soft_drop_flag = True
+                        elif hat_y == 1: current_piece_obj.rotate(game_grid_data)
+                        else: soft_drop_flag = False if hat_x == 0 else soft_drop_flag
+                    elif event.type == pygame.JOYBUTTONDOWN and event.joy == joystick_obj.get_id() and event.button not in [6,7] and not current_piece_obj.is_hard_dropping_animated:
+                        if event.button == 0: current_piece_obj.rotate(game_grid_data)
+                        elif event.button == 1:
+                            original_y = current_piece_obj.y; temp_piece_for_calc = Piece(current_piece_obj.x, original_y, shape_type=current_piece_obj.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=config_manager.get("gamemode", "standard")); temp_piece_for_calc.rotation = current_piece_obj.rotation; calculated_target_y = original_y
+                            while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)): calculated_target_y += 1
+                            current_piece_obj.target_y_for_animated_drop = calculated_target_y; current_piece_obj.is_hard_dropping_animated = True; soft_drop_flag = False
+        elif game_phase_str == "GAME_OVER":
+            action = handle_game_over_inputs(event)
+            if action == "RESTART": action_request = "RESTART"; break
+            elif action == "QUIT": running_flag = False; break
+            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN: continue
+        if joystick_enabled_flag and joystick_obj and event.type == pygame.JOYBUTTONDOWN:
+            if event.button == 7 and game_phase_str == "PLAYING":
+                game_paused_flag = not game_paused_flag
+                if game_paused_flag: time_at_pause_val = time.time()
+                else:
+                    if not help_screen_active_flag and not config_menu_active_flag: total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
+            elif event.button == 6 and game_phase_str == "PLAYING" and not game_paused_flag: ai_mode_flag = not ai_mode_flag; last_ai_move_time_val = time.time() if ai_mode_flag else last_ai_move_time_val; soft_drop_flag = False if ai_mode_flag else soft_drop_flag; current_piece_obj.is_hard_dropping_animated = False if ai_mode_flag and current_piece_obj else current_piece_obj.is_hard_dropping_animated if current_piece_obj else False
+    return {"running": running_flag, "game_paused": game_paused_flag, "ai_mode_active": ai_mode_flag, "soft_drop_active": soft_drop_flag, "current_piece": current_piece_obj, "time_at_pause": time_at_pause_val, "total_paused_duration": total_paused_duration_val, "last_fall_time": last_fall_time_val, "last_ai_move_time": last_ai_move_time_val, "action_request": action_request, "help_screen_active": help_screen_active_flag, "config_menu_active": config_menu_active_flag, "sound_effects_enabled": sound_effects_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag, "music_enabled": music_enabled_flag, "current_username_input": current_username_str, "game_phase_str": game_phase_str}
 
 def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, level, total_lines, lines_for_lvl):
     lines_to_remove_indices.sort(reverse=True)
@@ -303,7 +695,7 @@ def main():
     TITLE_FONT = load_font(TITLE_FONT_SIZE); GAME_OVER_FONT = load_font(GAME_OVER_FONT_SIZE)
 
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
-    top_scores_list = _load_best_score()
+    top_scores_list = _load_best_score() # Call the restored function
 
     background_music_loaded = False
     if os.path.isdir(SOUND_DIR):
@@ -340,17 +732,16 @@ def main():
         events = pygame.event.get()
         event_handling_result = _handle_events(events, game_over, game_paused, ai_mode_active, soft_drop_active, current_piece, game_grid, running, time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time, joystick, joystick_enabled, help_screen_active, game_phase, current_username_input, config_menu_active, sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, config_manager)
 
-        # Explicitly unpack results
         running = event_handling_result["running"]
         game_paused = event_handling_result["game_paused"]
         ai_mode_active = event_handling_result["ai_mode_active"]
         soft_drop_active = event_handling_result["soft_drop_active"]
-        current_piece = event_handling_result["current_piece"] # Can be None
+        current_piece = event_handling_result["current_piece"]
         time_at_pause = event_handling_result["time_at_pause"]
         total_paused_duration = event_handling_result["total_paused_duration"]
         last_fall_time = event_handling_result["last_fall_time"]
         last_ai_move_time = event_handling_result["last_ai_move_time"]
-        action_request = event_handling_result["action_request"] # This is the important one
+        action_request = event_handling_result["action_request"]
         help_screen_active = event_handling_result["help_screen_active"]
         config_menu_active = event_handling_result["config_menu_active"]
         sound_effects_enabled = event_handling_result["sound_effects_enabled"]
@@ -358,7 +749,6 @@ def main():
         line_blink_enabled = event_handling_result["line_blink_enabled"]
         music_enabled = event_handling_result["music_enabled"]
         current_username_input = event_handling_result["current_username_input"]
-        # game_phase is also in event_handling_result but often set by game logic below, ensure consistency if needed
 
         current_piece_set_type = config_manager.get("gamemode", "standard")
         if background_music_loaded:
@@ -381,8 +771,8 @@ def main():
 
         prev_game_over = game_over
         game_logic_result = _update_game_state(game_over, game_paused, ai_mode_active, current_piece, next_piece_1, next_piece_2, game_grid, score, current_level, total_lines_cleared, lines_for_current_level, current_fall_speed, last_fall_time, soft_drop_active, game_over_sound_played, last_ai_move_time, game_start_time, final_game_time_str, total_paused_duration, time_at_pause, help_screen_active, game_phase, lines_being_animated, line_animation_timer, line_blink_enabled, current_piece_set_type)
-        # Explicitly unpack results from game_logic_result
-        game_over = game_logic_result["game_over"]; current_piece = game_logic_result["current_piece"] # Can be None
+
+        game_over = game_logic_result["game_over"]; current_piece = game_logic_result["current_piece"]
         next_piece_1 = game_logic_result["next_piece_1"]; next_piece_2 = game_logic_result["next_piece_2"]
         game_grid = game_logic_result["game_grid"]; score = game_logic_result["score"]; current_level = game_logic_result["current_level"]
         total_lines_cleared = game_logic_result["total_lines_cleared"]; lines_for_current_level = game_logic_result["lines_for_current_level"]
@@ -391,8 +781,8 @@ def main():
         last_ai_move_time = game_logic_result["last_ai_move_time"]; final_game_time_str = game_logic_result["final_game_time_str"]
         formatted_time = game_logic_result["formatted_time"]; game_phase = game_logic_result["game_phase_str"]
         lines_being_animated = game_logic_result["lines_being_animated"]; line_animation_timer = game_logic_result["line_animation_timer"]
-        ai_mode_active = game_logic_result["ai_mode_active"]; # Ensure all returned state is updated
-        game_paused = game_logic_result["game_paused"]; # Ensure all returned state is updated
+        ai_mode_active = game_logic_result["ai_mode_active"];
+        game_paused = game_logic_result["game_paused"];
 
         if game_over and not prev_game_over:
             is_top_score = len(top_scores_list) < 10 or (score > 0 and score > top_scores_list[-1].get("score",0))
