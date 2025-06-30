@@ -719,7 +719,7 @@ def main():
     TITLE_FONT = load_font(TITLE_FONT_SIZE); GAME_OVER_FONT = load_font(GAME_OVER_FONT_SIZE)
 
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
-    top_scores_list = _load_best_score() # Call the restored function
+    top_scores_list = _load_best_score()
 
     background_music_loaded = False
     if os.path.isdir(SOUND_DIR):
@@ -750,7 +750,7 @@ def main():
     running = True; help_screen_active = False; config_menu_active = False
     game_phase = "PLAYING"; current_username_input = ""; formatted_time = ""
     lines_being_animated = []; line_animation_timer = 0
-    action_request = None # Initialize action_request before the loop
+    action_request = None
 
     while running:
         events = pygame.event.get()
@@ -820,5 +820,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-[end of blockfall_android/blockfall_game.py]
