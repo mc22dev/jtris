@@ -36,8 +36,8 @@ DEBUG_MODE = False
 # SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT are initialized in main()
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
-    SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "blockfall_clear": None, "level_up": None, "game_over": None}
-    SOUND_DIR = "sounds" # Specific to asset loading in blockfall.py
+SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "blockfall_clear": None, "level_up": None, "game_over": None}
+SOUND_DIR = "sounds" # Specific to asset loading in blockfall.py
 sound_effects_enabled = True # Renamed from sound_enabled
 shadow_enabled = True
 line_blink_enabled = True
