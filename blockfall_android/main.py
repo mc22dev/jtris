@@ -1,5 +1,5 @@
 # pgs4a entry point
-from . import blockfall
+from . import blockfall_game
 
 if __name__ == '__main__':
-    blockfall.main()
+    blockfall_game.main()
