@@ -33,6 +33,24 @@ pygame.joystick.init()
 
 DEBUG_MODE = False
 
+# Font loading helper
+def load_font(size):
+    """
+    Tries to load DejaVuSans.ttf. If not found, falls back to a system font.
+    """
+    font_name = "DejaVuSans.ttf"
+    try:
+        return pygame.font.Font(font_name, size)
+    except pygame.error as e:
+        if DEBUG_MODE:
+            print(f"DEBUG: Font '{font_name}' not found or failed to load: {e}. Falling back to system default.")
+        try:
+            return pygame.font.SysFont(None, size)
+        except pygame.error as e_sys:
+            if DEBUG_MODE:
+                print(f"DEBUG: System default font also failed to load: {e_sys}. Returning None.")
+            return None # Should ideally not happen if Pygame font is initialized
+
 # SCORE_FONT, INFO_FONT, TITLE_FONT, GAME_OVER_FONT are initialized in main()
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 
@@ -186,7 +204,7 @@ def format_time(total_seconds):
 
 def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
     global TITLE_FONT
-    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE)
+    if TITLE_FONT is None: TITLE_FONT = load_font(TITLE_FONT_SIZE)
 
     title_surface = TITLE_FONT.render(title_str, True, WHITE)
     screen.blit(title_surface, (x_pos, y_pos))
@@ -216,9 +234,9 @@ def draw_next_piece_area(screen, piece_to_draw, x_pos, y_pos, title_str):
 
 def draw_full_ui(screen, score, level, lines_cleared_total, next_piece_1_obj, next_piece_2_obj, lines_for_current_level, ai_mode_is_active, formatted_time_str, top_scores_list): # Updated next piece params
     global SCORE_FONT, INFO_FONT, TITLE_FONT # Ensure TITLE_FONT is global here for height calculation
-    if SCORE_FONT is None: SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE)
-    if INFO_FONT is None: INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
-    if TITLE_FONT is None: TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE) # Load if not already
+    if SCORE_FONT is None: SCORE_FONT = load_font(SCORE_FONT_SIZE)
+    if INFO_FONT is None: INFO_FONT = load_font(INFO_FONT_SIZE)
+    if TITLE_FONT is None: TITLE_FONT = load_font(TITLE_FONT_SIZE) # Load if not already
 
     current_y = UI_INFO_START_Y
     ui_start_x = game_constants.GRID_OFFSET_X + game_constants.GRID_WIDTH * game_constants.BLOCK_SIZE + UI_INFO_X_OFFSET
@@ -1385,9 +1403,9 @@ def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
     # """
     screen_surface.fill(BLACK) # This is the added line
 
-    title_font = fonts.get("title", pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE))
-    score_font = fonts.get("score", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
-    info_font = fonts.get("info", pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE))
+    title_font = fonts.get("title", load_font(GAME_OVER_FONT_SIZE))
+    score_font = fonts.get("score", load_font(INFO_FONT_SIZE))
+    info_font = fonts.get("info", load_font(INFO_FONT_SIZE))
 
     # Title
     title_surf = title_font.render("Top 10 Scores", True, WHITE)
@@ -1688,8 +1706,8 @@ def main():
     line_blink_enabled = loaded_config.get("line_blink_enabled", True)       # Default True
     music_enabled = loaded_config.get("music_enabled", True)               # Default True
 
-    SCORE_FONT = pygame.font.Font("DejaVuSans.ttf", SCORE_FONT_SIZE); INFO_FONT = pygame.font.Font("DejaVuSans.ttf", INFO_FONT_SIZE)
-    TITLE_FONT = pygame.font.Font("DejaVuSans.ttf", TITLE_FONT_SIZE); GAME_OVER_FONT = pygame.font.Font("DejaVuSans.ttf", GAME_OVER_FONT_SIZE)
+    SCORE_FONT = load_font(SCORE_FONT_SIZE); INFO_FONT = load_font(INFO_FONT_SIZE)
+    TITLE_FONT = load_font(TITLE_FONT_SIZE); GAME_OVER_FONT = load_font(GAME_OVER_FONT_SIZE)
     # Pre-render help text surfaces (using appropriate fonts)
     help_text_surfaces = _render_help_text_surfaces(GAME_OVER_FONT, SCORE_FONT, INFO_FONT, WHITE)
     top_scores_list = _load_best_score() # Renamed variable
