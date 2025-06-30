@@ -3,7 +3,7 @@ import pygame
 # Screen dimensions
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
-SCREEN_TITLE = "Tetris"
+SCREEN_TITLE = "BlockFall"
 
 # Colors
 BLACK = (0, 0, 0)
@@ -170,7 +170,7 @@ PENTOMINO_SHAPES = [
     ],
     # T (4 orientations) - Pivot: center of crossbar (0,0) (where the three blocks meet)
     [
-        [(-1, 0), (0, 0), (1, 0), (0, -1), (0, 1)], # T (original tetris T + one block on top of center) -> this is actually a cross shape, not T pentomino
+        [(-1, 0), (0, 0), (1, 0), (0, -1), (0, 1)], # T (original standard T + one block on top of center) -> this is actually a cross shape, not T pentomino
         # Correct T-pentomino: ### with one below middle
         #                  #
         [(-1,0), (0,0), (1,0), (0,1), (0,2)], # T shape down

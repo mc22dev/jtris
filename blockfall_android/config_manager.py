@@ -130,7 +130,7 @@ class ConfigManager:
         """Returns a copy of the entire configuration dictionary."""
         return self.config.copy()
 
-# Example of how to set DEBUG_MODE if it's globally managed, e.g., by tetris.py
+# Example of how to set DEBUG_MODE if it's globally managed, e.g., by blockfall_game.py
 # This is just illustrative; the actual mechanism might differ.
 def set_debug_mode(is_debug):
     global DEBUG_MODE

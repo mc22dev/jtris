@@ -141,7 +141,7 @@ def get_full_lines(grid_data):
 
 def get_score_for_lines(lines_cleared, level): base_score = {1: 40, 2: 100, 3: 300, 4: 1200}; return base_score.get(lines_cleared, 0) * level
 
-def spawn_piece_at_start(piece_set_type="BlockFall"): # Renamed for clarity
+def spawn_piece_at_start(piece_set_type="standard"): # Renamed for clarity
     return Piece(
         game_constants.GRID_WIDTH // 2, 0,
         is_valid_position_func=is_valid_position,
@@ -150,7 +150,7 @@ def spawn_piece_at_start(piece_set_type="BlockFall"): # Renamed for clarity
     )
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED, INITIAL_FALL_SPEED - (level -1) * FALL_SPEED_DECREMENT_PER_LEVEL)
-def add_garbage_blocks(grid_data, level, piece_set_type="BlockFall"): # Added piece_set_type
+def add_garbage_blocks(grid_data, level, piece_set_type="standard"): # Added piece_set_type
     if level < GARBAGE_START_LEVEL: return False
     num_garbage_rows = min(MAX_GARBAGE_ROWS, (level - GARBAGE_START_LEVEL) // 2 + 1)
 
@@ -327,7 +327,7 @@ def draw_level_progress_bar(screen, current_lines, lines_needed, bar_outer_rect,
 # --- Input Handling Sub-functions ---
 
 # Helper functions for _update_game_state
-def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="BlockFall"): # Added piece_set_type parameter
+def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="standard"): # Added piece_set_type parameter
     # AI Player Decision Logic
     # gs.ai_mode_active, gs.game_over, gs.current_piece, gs.last_ai_move_time,
     # gs.soft_drop_active are modified here.
@@ -528,7 +528,7 @@ def handle_game_over_inputs(event):
             return "QUIT"
     return None # No relevant action
 
-def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="BlockFall"): # Added piece_set_type
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="standard"): # Added piece_set_type
     """
     Handles player inputs for controlling the current piece (movement, rotation, drop).
     Assumes current_piece exists, game is not over, AI is not active, and piece is not already hard dropping.
@@ -591,7 +591,7 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
     return soft_drop_active_flag
 
 # --- Game State Reset Function ---
-def reset_game_state(piece_set_type="BlockFall"): # Added piece_set_type argument
+def reset_game_state(piece_set_type="standard"): # Added piece_set_type argument
     """Initializes and returns all game state variables for a new game."""
     game_grid = create_grid()
     current_piece = spawn_piece_at_start(piece_set_type=piece_set_type) # Pass piece_set_type
@@ -635,7 +635,7 @@ def reset_game_state(piece_set_type="BlockFall"): # Added piece_set_type argumen
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
-def _handle_restart_action(piece_set_type="BlockFall"): # Added piece_set_type
+def _handle_restart_action(piece_set_type="standard"): # Added piece_set_type
     # This function will be responsible for managing the game restart logic.
     # It calls reset_game_state to get a fresh set of game parameters.
     new_game_state = reset_game_state(piece_set_type=piece_set_type)
@@ -672,7 +672,7 @@ def _unpack_game_state(game_state_dict):
 
 # load_config and save_config are now handled by ConfigManager
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="BlockFall"):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="standard"):
     # Create a GameState object to pass around
     gs = type('GameState', (), {})() # Simple namespace object for now
     gs.game_over = game_over_flag
@@ -963,8 +963,8 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     if DEBUG_MODE:
                         print(f"Grid Size setting toggled to: {new_grid_size}. Restart game for changes to take effect. Config saved.")
                 elif event.key == pygame.K_k: # 'K' for Kind of pieces / Game Mode
-                    current_gamemode = config_manager.get("gamemode", "BlockFall")
-                    new_gamemode = "pentomino" if current_gamemode == "BlockFall" else "BlockFall"
+                    current_gamemode = config_manager.get("gamemode", "standard")
+                    new_gamemode = "pentomino" if current_gamemode == "standard" else "standard"
                     config_manager.set("gamemode", new_gamemode)
                     if DEBUG_MODE:
                         print(f"Gamemode setting toggled to: {new_gamemode}. Restart game recommended. Config saved.")
@@ -1066,7 +1066,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     # piece_set_type will need to be passed into _handle_events first
                     # For now, assuming it's available as current_piece_set_type_local or similar
                     # This will be fixed when _handle_events signature is updated
-                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "tetris"))
+                    soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "standard"))
 
                 # Joystick controls for active play (piece movement)
                 if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag:
@@ -1106,7 +1106,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                                         current_piece_obj.rotate(game_grid_data)
                                     elif button == 1:
                                         original_y = current_piece_obj.y
-                                        current_game_mode = config_manager.get("gamemode", "tetris") # Get current game mode
+                                        current_game_mode = config_manager.get("gamemode", "standard") # Get current game mode
                                         temp_piece_for_calc = Piece(
                                             current_piece_obj.x, original_y,
                                             shape_type=current_piece_obj.shape_type,
@@ -1323,7 +1323,7 @@ def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, leve
 
 def _render_help_text_surfaces(title_font, section_font, info_font, text_color):
     help_lines_data = [
-        ("BlockFall - HELP", title_font),
+        ("BlockFall - HELP", title_font), # This was already BlockFall, "TETRIS - HELP" was in ui_manager.py previously
         ("", section_font), # Spacer
         ("Keyboard Controls:", section_font),
         ("  Left Arrow:  Move Piece Left", info_font),
@@ -1593,7 +1593,7 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
         screen_surface.blit(grid_size_option_surf, grid_size_option_rect)
 
         # Gamemode Option Text (New)
-        current_gamemode_str = config_manager.get("gamemode", "tetris").capitalize() # Get from config_manager which is available in main
+        current_gamemode_str = config_manager.get("gamemode", "standard").capitalize() # Get from config_manager which is available in main
         gamemode_option_text_str = f"Game Mode: {current_gamemode_str} (Press K to toggle)"
         gamemode_option_surf = INFO_FONT.render(gamemode_option_text_str, True, WHITE)
         gamemode_option_rect = gamemode_option_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 120)) # Adjusted Y
@@ -1641,12 +1641,12 @@ def main():
 
     # Load grid size from config and update constants
     config_grid_size = config_manager.get("grid_size", "normal")
-    # current_gamemode = config_manager.get("gamemode", "BlockFall") # current_gamemode is loaded for debug print, but its logic for grid_size override is removed.
+    # current_gamemode = config_manager.get("gamemode", "standard") # current_gamemode is loaded for debug print, but its logic for grid_size override is removed.
 
     if DEBUG_MODE:
         print(f"DEBUG blockfall.main: Loaded grid_size from config: {config_grid_size}")
         # The gamemode is still relevant for piece sets, just not for overriding grid_size here.
-        current_gamemode_debug = config_manager.get("gamemode", "BlockFall")
+        current_gamemode_debug = config_manager.get("gamemode", "standard")
         print(f"DEBUG blockfall.main: Loaded gamemode from config: {current_gamemode_debug}")
 
     # REMOVED: Redundant logic that forced grid_size to "large" on startup if gamemode was "pentomino".
@@ -1748,7 +1748,7 @@ def main():
 
     # Initial game state setup
     # Get piece_set_type from config for the initial reset
-    initial_piece_set_type = config_manager.get("gamemode", "BlockFall")
+    initial_piece_set_type = config_manager.get("gamemode", "standard")
     game_state_dict = reset_game_state(piece_set_type=initial_piece_set_type)
     (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level,
      total_lines_cleared, lines_for_current_level, game_over,
@@ -1803,7 +1803,7 @@ def main():
 
         # --- Piece Set Type (Game Mode) ---
         # This will eventually be loaded from config_manager in main
-        current_piece_set_type = config_manager.get("gamemode", "BlockFall")
+        current_piece_set_type = config_manager.get("gamemode", "standard")
 
 
         # --- Runtime Music Management ---

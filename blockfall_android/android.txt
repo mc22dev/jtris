@@ -1,5 +1,5 @@
-title=Pygame Tetris
-package.name=pygametetris
+title=Pygame BlockFall
+package.name=pygameblockfall
 package.domain=org.example
 version=1.0
 orientation=landscape

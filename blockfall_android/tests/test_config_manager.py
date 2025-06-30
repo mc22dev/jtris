@@ -6,7 +6,7 @@ from blockfall_android.config_manager import ConfigManager, DEFAULT_CONFIG
 # Define a temporary config file name for testing
 TEST_CONFIG_FILENAME = "test_config.json"
 # Define a path for the test config file, assuming tests run from project root or a location
-# where 'tetris_android' is a subdirectory. Adjust if necessary.
+# where 'blockfall_android' is a subdirectory. Adjust if necessary.
 # For simplicity, let's assume the test file will be created in the same dir as test_config_manager.py
 TEST_CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), TEST_CONFIG_FILENAME)
 

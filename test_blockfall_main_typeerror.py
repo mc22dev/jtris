@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Adjust path to import from tetris_android, assuming script is in project root /app
+# Adjust path to import from blockfall_android, assuming script is in project root /app
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 # MockEvent class definition
@@ -17,16 +17,16 @@ class MockEvent:
         self.unicode = None
 
 original_pygame_event_get = None
-blockfall_module = None # To store the imported blockfall module
+blockfall_game_module = None # To store the imported blockfall_game module
 
 # Define mock_pygame_event_get
 def mock_pygame_event_get():
     if not hasattr(mock_pygame_event_get, 'called'):
         mock_pygame_event_get.called = True
-        # Access pygame.QUIT through the imported blockfall module if available
+        # Access pygame.QUIT through the imported blockfall_game module if available
         quit_event_type = 256 # Default pygame.QUIT value
-        if blockfall_module and hasattr(blockfall_module, 'pygame') and hasattr(blockfall_module.pygame, 'QUIT'):
-            quit_event_type = blockfall_module.pygame.QUIT
+        if blockfall_game_module and hasattr(blockfall_game_module, 'pygame') and hasattr(blockfall_game_module.pygame, 'QUIT'):
+            quit_event_type = blockfall_game_module.pygame.QUIT
         return [MockEvent(quit_event_type)]
     return []
 
@@ -35,20 +35,20 @@ type_error_occurred = False
 expected_error_if_unfixed = "_handle_events() takes 22 positional arguments but 23 were given"
 
 try:
-    # Import blockfall module here to catch initialization errors (like pygame.mixer.init)
-    from tetris_android import blockfall
-    blockfall_module = blockfall # Store for use in mock_pygame_event_get
+    # Import blockfall_game module here to catch initialization errors (like pygame.mixer.init)
+    from blockfall_android import blockfall_game
+    blockfall_game_module = blockfall_game # Store for use in mock_pygame_event_get
 
-    # Store original pygame.event.get and assign mock AFTER blockfall (and its pygame) is imported
-    if hasattr(blockfall.pygame, 'event') and hasattr(blockfall.pygame.event, 'get'):
-        original_pygame_event_get = blockfall.pygame.event.get
-        blockfall.pygame.event.get = mock_pygame_event_get
+    # Store original pygame.event.get and assign mock AFTER blockfall_game (and its pygame) is imported
+    if hasattr(blockfall_game.pygame, 'event') and hasattr(blockfall_game.pygame.event, 'get'):
+        original_pygame_event_get = blockfall_game.pygame.event.get
+        blockfall_game.pygame.event.get = mock_pygame_event_get
     else:
-        print("Pygame or pygame.event.get not found in blockfall module after import. Mocking may not be effective.")
+        print("Pygame or pygame.event.get not found in blockfall_game module after import. Mocking may not be effective.")
 
-    print("Calling blockfall.main()...")
-    blockfall.main()
-    print("TEST PASSED: blockfall.main() call completed without the specific TypeError related to _handle_events.")
+    print("Calling blockfall_game.main()...")
+    blockfall_game.main()
+    print("TEST PASSED: blockfall_game.main() call completed without the specific TypeError related to _handle_events.")
 
 except TypeError as e:
     error_message = str(e)
@@ -57,15 +57,15 @@ except TypeError as e:
         type_error_occurred = True
         # sys.exit(1) will be handled in finally
     else:
-        print(f"TEST PASSED: blockfall.main() call resulted in a TypeError, but it was NOT the specific _handle_events argument count error. Error: {error_message}")
+        print(f"TEST PASSED: blockfall_game.main() call resulted in a TypeError, but it was NOT the specific _handle_events argument count error. Error: {error_message}")
 
 except Exception as e:
-    print(f"TEST PASSED: blockfall.main() call completed (or failed with a non-TypeError we are checking for, or an import/init error). Error: {type(e).__name__}: {e}")
+    print(f"TEST PASSED: blockfall_game.main() call completed (or failed with a non-TypeError we are checking for, or an import/init error). Error: {type(e).__name__}: {e}")
 
 finally:
     # Restore original pygame.event.get
-    if original_pygame_event_get and blockfall_module: # Ensure blockfall_module was successfully imported
-        blockfall_module.pygame.event.get = original_pygame_event_get
+    if original_pygame_event_get and blockfall_game_module: # Ensure blockfall_game_module was successfully imported
+        blockfall_game_module.pygame.event.get = original_pygame_event_get
     print("Restored original pygame.event.get (if it was mocked).")
 
     if type_error_occurred:

@@ -108,7 +108,7 @@ def evaluate_board_state(grid, lines_cleared_by_move):
     score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
     return score
 
-def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_position_func, play_sound_func, piece_set_type="tetris"): # Added piece_set_type
+def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_position_func, play_sound_func, piece_set_type="standard"): # Added piece_set_type
     """
     Finds the best move (column and rotation) for the current piece.
     """

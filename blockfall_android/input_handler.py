@@ -2,7 +2,7 @@ import pygame
 import time
 from .game_state import GameState
 from .piece import Piece
-from .tetris import is_valid_position, play_sound
+from .blockfall_game import is_valid_position, play_sound
 from .constants import RESTART_KEY
 
 def handle_game_over_inputs(event):

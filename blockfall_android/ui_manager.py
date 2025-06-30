@@ -1,8 +1,8 @@
 import pygame
 import time
 from .game_state import GameState
-from .piece import Piece # Changed from .tetris to .piece
-from .tetris import is_valid_position # Piece removed from this import
+from .piece import Piece # Changed from .blockfall_game to .piece
+from .blockfall_game import is_valid_position # Piece removed from this import
 from . import constants # Import the new constants module
 
 # --- Constants are now in constants.py ---
@@ -129,7 +129,7 @@ def _draw_full_ui(screen_surface, gs: GameState, fonts, formatted_time_str, top_
 
 def _render_help_text_surfaces(fonts, text_color): # text_color is constants.WHITE
     help_lines_data = [
-        ("TETRIS - HELP", fonts['game_over']), # Typically larger font for title
+        ("BlockFall - HELP", fonts['game_over']), # Typically larger font for title
         ("", fonts['info']), # Spacer
         ("Keyboard Controls:", fonts['score']), # Slightly larger for section titles
         ("  Left Arrow:  Move Piece Left", fonts['info']),
