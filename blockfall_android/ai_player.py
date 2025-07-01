@@ -186,7 +186,7 @@ def find_best_move(grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_
                     best_x = x_col
                     best_rotation = rotation_idx
                     best_landing_y = landing_y
-                elif current_move_score == best_score:
+                elif current_total_score == best_score:  # Corrected variable name here
                     if landing_y > best_landing_y:
                         best_x = x_col
                         best_rotation = rotation_idx
