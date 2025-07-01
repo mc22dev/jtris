@@ -741,7 +741,7 @@ def main():
 
     if background_music_loaded and music_enabled: pygame.mixer.music.set_volume(0.5); pygame.mixer.music.play(loops=-1)
 
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT)); pygame.display.set_caption(SCREEN_TITLE)
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN); pygame.display.set_caption(SCREEN_TITLE)
     joystick = None; joystick_enabled = False
     if pygame.joystick.get_count() > 0: joystick = pygame.joystick.Joystick(0); joystick.init(); joystick_enabled = True; print(f"Joystick: {joystick.get_name()}")
     else: print("No joystick.")
