@@ -21,6 +21,13 @@ pip install pygame
 ```
 (Or using the requirements.txt: `pip install -r requirements.txt`)
 
+## Installation of Resources
+This project requires external resources like background music. To download these resources, run the install script:
+```bash
+./install_resources.sh
+```
+Make sure the script is executable: `chmod +x install_resources.sh`.
+
 ## How to Run (Desktop)
 1. Ensure you have Python and Pygame installed.
 2. The main game script is `blockfall_android/main.py` (which runs `blockfall_android/blockfall.py`).
