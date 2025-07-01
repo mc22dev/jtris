@@ -115,7 +115,7 @@ def get_full_lines(grid_data):
 
 def get_score_for_lines(lines_cleared, level): base_score = {1:40,2:100,3:300,4:1200}; return base_score.get(lines_cleared,0)*level
 
-def spawn_piece_at_start(piece_set_type="standard"):
+def spawn_piece_at_start(piece_set_type="BlockFall"): # Use "BlockFall"
     return Piece(game_constants.GRID_WIDTH//2, 0,
                  is_valid_position_func=is_valid_position,
                  play_sound_func=play_sound,
@@ -123,7 +123,7 @@ def spawn_piece_at_start(piece_set_type="standard"):
 
 def calculate_fall_speed(level): return max(MIN_FALL_SPEED,INITIAL_FALL_SPEED-(level-1)*FALL_SPEED_DECREMENT_PER_LEVEL)
 
-def add_garbage_blocks(grid_data, level, piece_set_type="standard"):
+def add_garbage_blocks(grid_data, level, piece_set_type="BlockFall"): # Use "BlockFall"
     if level < GARBAGE_START_LEVEL: return False
     num_garbage_rows = min(MAX_GARBAGE_ROWS, (level - GARBAGE_START_LEVEL) // 2 + 1)
     for i in range(num_garbage_rows):
@@ -202,7 +202,7 @@ def draw_level_progress_bar(s,curr,needed,rect,colors,font,txt_color):
     if 'border' in colors: pygame.draw.rect(s,colors['border'],rect,1)
     if font: txt_surf=font.render(f"Progress: {curr}/{needed}",True,txt_color); s.blit(txt_surf,(rect.centerx-txt_surf.get_width()//2, rect.y-txt_surf.get_height()-2))
 
-def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="standard"):
+def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type="BlockFall"): # Use "BlockFall"
     if time.time() - gs.last_ai_move_time > AI_MOVE_DELAY:
         grid_copy_for_ai = ai_player.clone_grid(gs.game_grid)
         best_move_info = ai_player.find_best_move(
@@ -359,7 +359,7 @@ def handle_game_over_inputs(event):
             return "QUIT"
     return None
 
-def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="standard"):
+def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_active_flag, piece_set_type="BlockFall"): # Use "BlockFall"
     if event.type == pygame.KEYDOWN:
         if current_piece.is_hard_dropping_animated:
             return soft_drop_active_flag
@@ -402,7 +402,7 @@ def handle_player_piece_controls(event, current_piece, game_grid, soft_drop_acti
                  soft_drop_active_flag = False
     return soft_drop_active_flag
 
-def reset_game_state(piece_set_type="standard"):
+def reset_game_state(piece_set_type="BlockFall"): # Use "BlockFall"
     game_grid = create_grid()
     current_piece = spawn_piece_at_start(piece_set_type=piece_set_type)
     next_piece_1 = Piece(0, 0,
@@ -435,7 +435,7 @@ def reset_game_state(piece_set_type="standard"):
         "game_paused": game_paused, "time_at_pause": time_at_pause, "total_paused_duration": total_paused_duration
     }
 
-def _handle_restart_action(piece_set_type="standard"):
+def _handle_restart_action(piece_set_type="BlockFall"): # Use "BlockFall"
     new_game_state = reset_game_state(piece_set_type=piece_set_type)
     return new_game_state
 
@@ -451,7 +451,7 @@ def _unpack_game_state(game_state_dict):
             game_state_dict["final_game_time_str"], game_state_dict["game_paused"],
             game_state_dict["time_at_pause"], game_state_dict["total_paused_duration"])
 
-def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="standard"):
+def _update_game_state(game_over_flag, game_paused_flag, ai_mode_flag, current_piece_obj, next_piece_1_obj, next_piece_2_obj, game_grid_data, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, current_fall_speed_val, last_fall_time_val, soft_drop_flag, game_over_sound_played_flag, last_ai_move_time_val, game_start_time_val, final_game_time_str_val, total_paused_duration_val, time_at_pause_val, help_screen_active_flag, game_phase_str, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag, piece_set_type="BlockFall"): # Use "BlockFall"
     gs = type('GameState', (), {})()
     gs.game_over = game_over_flag; gs.ai_mode_active = ai_mode_flag; gs.current_piece = current_piece_obj
     gs.next_piece_1 = next_piece_1_obj; gs.next_piece_2 = next_piece_2_obj; gs.game_grid = game_grid_data
@@ -557,8 +557,8 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                 elif event.key == pygame.K_b: line_blink_enabled_flag = not line_blink_enabled_flag; config_manager.set("line_blink_enabled", line_blink_enabled_flag)
                 elif event.key == pygame.K_g: config_manager.set("grid_size", "large" if config_manager.get("grid_size", "normal") == "normal" else "normal")
                 elif event.key == pygame.K_k:
-                    current_mode = config_manager.get("gamemode", "standard")
-                    new_mode = "pentomino" if current_mode == "standard" else "standard"
+                    current_mode = config_manager.get("gamemode", "BlockFall") # Use "BlockFall" as default
+                    new_mode = "pentomino" if current_mode == "BlockFall" else "BlockFall" # Toggle with "BlockFall"
                     config_manager.set("gamemode", new_mode)
                     # If switching to pentomino, ensure grid is large enough
                     if new_mode == "pentomino" and config_manager.get("grid_size", "normal") == "normal":
@@ -589,7 +589,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                 continue
             if not game_paused_flag:
                 if event.type == pygame.KEYDOWN and event.key == AI_PLAYER_TOGGLE_KEY: ai_mode_flag = not ai_mode_flag; last_ai_move_time_val = time.time() if ai_mode_flag else last_ai_move_time_val; soft_drop_flag = False if ai_mode_flag else soft_drop_flag; current_piece_obj.is_hard_dropping_animated = False if ai_mode_flag and current_piece_obj else current_piece_obj.is_hard_dropping_animated if current_piece_obj else False ; continue
-                if current_piece_obj and not ai_mode_flag: soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "standard"))
+                if current_piece_obj and not ai_mode_flag: soft_drop_flag = handle_player_piece_controls(event, current_piece_obj, game_grid_data, soft_drop_flag, config_manager.get("gamemode", "BlockFall")) # Use "BlockFall"
                 if joystick_enabled_flag and joystick_obj and current_piece_obj and not ai_mode_flag :
                     if event.type == pygame.JOYAXISMOTION and event.joy == joystick_obj.get_id() and not current_piece_obj.is_hard_dropping_animated:
                         if event.axis == 0: current_piece_obj.x += 1 if event.value > 0.5 else -1 if event.value < -0.5 else 0; play_sound("move") if not is_valid_position(current_piece_obj, game_grid_data) and (current_piece_obj.x_position_backup(),False) else None
@@ -602,7 +602,7 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
                     elif event.type == pygame.JOYBUTTONDOWN and event.joy == joystick_obj.get_id() and event.button not in [6,7] and not current_piece_obj.is_hard_dropping_animated:
                         if event.button == 0: current_piece_obj.rotate(game_grid_data)
                         elif event.button == 1:
-                            original_y = current_piece_obj.y; temp_piece_for_calc = Piece(current_piece_obj.x, original_y, shape_type=current_piece_obj.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=config_manager.get("gamemode", "standard")); temp_piece_for_calc.rotation = current_piece_obj.rotation; calculated_target_y = original_y
+                            original_y = current_piece_obj.y; temp_piece_for_calc = Piece(current_piece_obj.x, original_y, shape_type=current_piece_obj.shape_type, is_valid_position_func=is_valid_position, play_sound_func=play_sound, piece_set_type=config_manager.get("gamemode", "BlockFall")); temp_piece_for_calc.rotation = current_piece_obj.rotation; calculated_target_y = original_y # Use "BlockFall"
                             while is_valid_position(temp_piece_for_calc, game_grid_data, check_y_offset=(calculated_target_y - original_y + 1)): calculated_target_y += 1
                             current_piece_obj.target_y_for_animated_drop = calculated_target_y; current_piece_obj.is_hard_dropping_animated = True; soft_drop_flag = False
         elif game_phase_str == "GAME_OVER":
@@ -747,7 +747,7 @@ def main():
     else: print("No joystick.")
 
     clock = pygame.time.Clock()
-    game_state_vars = reset_game_state(config_manager.get("gamemode", "standard"))
+    game_state_vars = reset_game_state(config_manager.get("gamemode", "BlockFall")) # Use "BlockFall"
     (game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, total_lines_cleared,
      lines_for_current_level, game_over, current_fall_speed, last_fall_time, soft_drop_active,
      game_over_sound_played, ai_mode_active, last_ai_move_time, game_start_time,
@@ -780,7 +780,7 @@ def main():
         music_enabled = event_handling_result["music_enabled"]
         current_username_input = event_handling_result["current_username_input"]
 
-        current_piece_set_type = config_manager.get("gamemode", "standard")
+        current_piece_set_type = config_manager.get("gamemode", "BlockFall") # Use "BlockFall"
         if background_music_loaded:
             if music_enabled and not pygame.mixer.music.get_busy(): pygame.mixer.music.unpause(); pygame.mixer.music.play(loops=-1)
             elif not music_enabled and pygame.mixer.music.get_busy(): pygame.mixer.music.pause()

@@ -2,7 +2,7 @@ import random
 from .constants import SHAPES, PIECE_COLORS, PENTOMINO_SHAPES, PENTOMINO_PIECE_COLORS
 
 class Piece:
-    def __init__(self, x, y, shape_type=None, is_valid_position_func=None, play_sound_func=None, piece_set_type="standard"): # Allow forcing shape_type for next_piece
+    def __init__(self, x, y, shape_type=None, is_valid_position_func=None, play_sound_func=None, piece_set_type="BlockFall"): # Use "BlockFall"
         self.is_valid_position = is_valid_position_func
         self.play_sound = play_sound_func
         self.piece_set_type = piece_set_type
