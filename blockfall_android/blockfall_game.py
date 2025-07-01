@@ -528,10 +528,35 @@ def _load_best_score():
         if DEBUG_MODE: print(f"Warning: An unexpected error occurred loading {filename}: {e}. Returning empty list.")
         return default_scores_list
 
-def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, config_manager):
+def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_drop_flag, current_piece_obj, game_grid_data, running_flag, time_at_pause_val, total_paused_duration_val, last_fall_time_val, last_ai_move_time_val, joystick_obj, joystick_enabled_flag, help_screen_active_flag, game_phase_str, current_username_str, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, config_manager, confirming_quit_flag):
     action_request = None
     for event in events:
-        if event.type == pygame.QUIT: running_flag = False; continue
+        if event.type == pygame.QUIT:
+            if not confirming_quit_flag: # If not already confirming, start confirmation
+                confirming_quit_flag = True
+                # Pause game if not already paused by menus
+                if not game_paused_flag and not help_screen_active_flag and not config_menu_active_flag:
+                    game_paused_flag = True
+                    time_at_pause_val = time.time()
+            # If already confirming, QUIT event does nothing here, handled by main loop or specific Y/N
+            continue
+
+        if confirming_quit_flag:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_y:
+                    running_flag = False # Actual quit
+                    confirming_quit_flag = False # Reset flag
+                elif event.key == pygame.K_n:
+                    confirming_quit_flag = False # Cancel quit
+                    # Unpause game only if pause was triggered by quit confirmation
+                    if not help_screen_active_flag and not config_menu_active_flag:
+                         game_paused_flag = False
+                         if time_at_pause_val > 0: # Ensure pause time is correctly accounted for
+                             total_paused_duration_val += time.time() - time_at_pause_val
+                             time_at_pause_val = 0
+                         last_fall_time_val, last_ai_move_time_val = time.time(), time.time() # Reset game timers
+            continue # Process no other events if confirming quit
+
         if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
             help_screen_active_flag = not help_screen_active_flag
             if help_screen_active_flag: game_paused_flag = True; time_at_pause_val = time.time() if not game_paused_flag else time_at_pause_val
@@ -608,16 +633,39 @@ def _handle_events(events, game_over_flag, game_paused_flag, ai_mode_flag, soft_
         elif game_phase_str == "GAME_OVER":
             action = handle_game_over_inputs(event)
             if action == "RESTART": action_request = "RESTART"; break
-            elif action == "QUIT": running_flag = False; break
-            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN: continue
+            # For ESC during GAME_OVER, directly quit or trigger confirmation if desired
+            elif action == "QUIT": # This means ESC was pressed at game over
+                if not confirming_quit_flag:
+                    confirming_quit_flag = True
+                    # Game is already "paused" by being game over, no need to set time_at_pause
+                continue # Wait for Y/N
+            if event.type == pygame.QUIT: # Window close at game over
+                 if not confirming_quit_flag:
+                    confirming_quit_flag = True
+                 # else already confirming, do nothing until Y/N
+            continue # Skip other processing
+
+        # Handle Q to Quit and general ESC to Quit (during gameplay, help, config)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_q or \
+               (event.key == pygame.K_ESCAPE and not game_over_flag and \
+                (game_phase_str == "PLAYING" or help_screen_active_flag or config_menu_active_flag)):
+                if not confirming_quit_flag:
+                    confirming_quit_flag = True
+                    # Pause game if not already paused by menus or game over
+                    if not game_paused_flag and not game_over_flag: # help/config already set game_paused
+                        game_paused_flag = True
+                        time_at_pause_val = time.time()
+                continue # Skip other processing if we just triggered confirmation
+
         if joystick_enabled_flag and joystick_obj and event.type == pygame.JOYBUTTONDOWN:
-            if event.button == 7 and game_phase_str == "PLAYING":
+            if event.button == 7 and game_phase_str == "PLAYING": # Start button for pause
                 game_paused_flag = not game_paused_flag
                 if game_paused_flag: time_at_pause_val = time.time()
                 else:
                     if not help_screen_active_flag and not config_menu_active_flag: total_paused_duration_val += time.time() - time_at_pause_val if time_at_pause_val > 0 else 0; time_at_pause_val = 0; last_fall_time_val, last_ai_move_time_val = time.time(), time.time()
             elif event.button == 6 and game_phase_str == "PLAYING" and not game_paused_flag: ai_mode_flag = not ai_mode_flag; last_ai_move_time_val = time.time() if ai_mode_flag else last_ai_move_time_val; soft_drop_flag = False if ai_mode_flag else soft_drop_flag; current_piece_obj.is_hard_dropping_animated = False if ai_mode_flag and current_piece_obj else current_piece_obj.is_hard_dropping_animated if current_piece_obj else False
-    return {"running": running_flag, "game_paused": game_paused_flag, "ai_mode_active": ai_mode_flag, "soft_drop_active": soft_drop_flag, "current_piece": current_piece_obj, "time_at_pause": time_at_pause_val, "total_paused_duration": total_paused_duration_val, "last_fall_time": last_fall_time_val, "last_ai_move_time": last_ai_move_time_val, "action_request": action_request, "help_screen_active": help_screen_active_flag, "config_menu_active": config_menu_active_flag, "sound_effects_enabled": sound_effects_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag, "music_enabled": music_enabled_flag, "current_username_input": current_username_str, "game_phase_str": game_phase_str}
+    return {"running": running_flag, "game_paused": game_paused_flag, "ai_mode_active": ai_mode_flag, "soft_drop_active": soft_drop_flag, "current_piece": current_piece_obj, "time_at_pause": time_at_pause_val, "total_paused_duration": total_paused_duration_val, "last_fall_time": last_fall_time_val, "last_ai_move_time": last_ai_move_time_val, "action_request": action_request, "help_screen_active": help_screen_active_flag, "config_menu_active": config_menu_active_flag, "sound_effects_enabled": sound_effects_enabled_flag, "shadow_enabled": shadow_enabled_flag, "line_blink_enabled": line_blink_enabled_flag, "music_enabled": music_enabled_flag, "current_username_input": current_username_str, "game_phase_str": game_phase_str, "confirming_quit": confirming_quit_flag}
 
 def _finalize_line_clear(grid_data, lines_to_remove_indices, current_score, level, total_lines, lines_for_lvl):
     lines_to_remove_indices.sort(reverse=True)
@@ -663,7 +711,7 @@ def _draw_high_score_screen(screen_surface, top_scores_list, fonts):
             current_y += line_h
     instr_surf = info_font.render("Press any key to Restart, ESC to Quit", True, WHITE); screen_surface.blit(instr_surf, instr_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100)))
 
-def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, current_grid_config_str, config_manager):
+def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, score_val, current_level_val, total_lines_cleared_val, lines_for_current_level_val, ai_mode_flag, formatted_time_str, game_over_flag, game_paused_flag, clock_obj, help_screen_active_flag, help_text_surfaces_list, game_phase_str, current_username_str, top_scores_list, lines_being_animated_list, line_animation_timer_val, config_menu_active_flag, sound_effects_enabled_flag, shadow_enabled_flag, line_blink_enabled_flag, music_enabled_flag, current_grid_config_str, config_manager, confirming_quit_flag): # Added confirming_quit_flag
     screen_surface.fill(BLACK); draw_grid_lines(screen_surface); draw_blocks(screen_surface, game_grid_data, lines_being_animated_list, line_animation_timer_val, line_blink_enabled_flag)
     if shadow_enabled_flag and not game_over_flag and current_piece_obj and game_phase_str == "PLAYING":
         shadow_y = get_shadow_position_y(current_piece_obj, game_grid_data)
@@ -701,8 +749,41 @@ def _draw_game_screen(screen_surface, game_grid_data, current_piece_obj, next_pi
             screen_surface.blit(INFO_FONT.render("Restart game for some settings to apply.", True, GREY), INFO_FONT.render("Restart game for some settings to apply.", True, GREY).get_rect(center=(SCREEN_WIDTH//2, hint_y_base + spacing*0.5)))
             screen_surface.blit(INFO_FONT.render("Press C or ESC to close", True, GREY), INFO_FONT.render("Press C or ESC to close", True, GREY).get_rect(center=(SCREEN_WIDTH//2, hint_y_base + spacing*1.5)))
     elif game_phase_str == "HIGH_SCORE_DISPLAY": _draw_high_score_screen(screen_surface, top_scores_list, {"title":GAME_OVER_FONT, "score":INFO_FONT, "info":INFO_FONT})
+
+    if confirming_quit_flag:
+        _draw_quit_confirmation_dialog(screen_surface, {"info": INFO_FONT, "game_over": GAME_OVER_FONT}) # Use available fonts
+
     pygame.display.flip()
     if clock_obj: clock_obj.tick(60)
+
+def _draw_quit_confirmation_dialog(screen_surface, fonts):
+    """Draws the quit confirmation dialog box."""
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))  # Semi-transparent black overlay
+    screen_surface.blit(overlay, (0, 0))
+
+    dialog_width = 400
+    dialog_height = 150
+    dialog_x = (SCREEN_WIDTH - dialog_width) // 2
+    dialog_y = (SCREEN_HEIGHT - dialog_height) // 2
+
+    # Dialog box
+    pygame.draw.rect(screen_surface, BLACK, (dialog_x, dialog_y, dialog_width, dialog_height))
+    pygame.draw.rect(screen_surface, WHITE, (dialog_x, dialog_y, dialog_width, dialog_height), 2) # Border
+
+    font_to_use = fonts.get("info") if fonts.get("info") else pygame.font.SysFont(None, 30) # Fallback font
+
+    # Message text
+    message_text = "Are you sure you want to quit?"
+    message_surf = font_to_use.render(message_text, True, WHITE)
+    message_rect = message_surf.get_rect(center=(SCREEN_WIDTH // 2, dialog_y + 40))
+    screen_surface.blit(message_surf, message_rect)
+
+    # Options text
+    options_text = "(Y)es / (N)o"
+    options_surf = font_to_use.render(options_text, True, YELLOW)
+    options_rect = options_surf.get_rect(center=(SCREEN_WIDTH // 2, dialog_y + 90))
+    screen_surface.blit(options_surf, options_rect)
 
 def main():
     parser = argparse.ArgumentParser(description="BlockFall Game with an AI player option."); parser.add_argument("--debug", action="store_true", help="Enable debug logging to console."); args = parser.parse_args()
@@ -757,13 +838,30 @@ def main():
     game_phase = "PLAYING"; current_username_input = ""; formatted_time = ""
     lines_being_animated = []; line_animation_timer = 0
     action_request = None
+    confirming_quit = False # Initialize confirming_quit state
 
     while running:
         events = pygame.event.get()
-        event_handling_result = _handle_events(events, game_over, game_paused, ai_mode_active, soft_drop_active, current_piece, game_grid, running, time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time, joystick, joystick_enabled, help_screen_active, game_phase, current_username_input, config_menu_active, sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, config_manager)
+        # Pass confirming_quit to _handle_events and receive its updated state
+        event_handling_result = _handle_events(events, game_over, game_paused, ai_mode_active, soft_drop_active, current_piece, game_grid, running, time_at_pause, total_paused_duration, last_fall_time, last_ai_move_time, joystick, joystick_enabled, help_screen_active, game_phase, current_username_input, config_menu_active, sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, config_manager, confirming_quit)
 
         running = event_handling_result["running"]
-        game_paused = event_handling_result["game_paused"]
+        confirming_quit = event_handling_result["confirming_quit"] # Update confirming_quit
+
+        # Game pause logic needs to consider confirming_quit
+        new_game_paused_state = event_handling_result["game_paused"]
+        if confirming_quit and not game_paused: # If confirming quit and game wasn't paused by menu, ensure it is
+            if not help_screen_active and not config_menu_active:
+                new_game_paused_state = True
+                if time_at_pause == 0: # Only set time_at_pause if not already set by another pause trigger
+                    time_at_pause = time.time()
+        elif not confirming_quit and game_paused and not help_screen_active and not config_menu_active and event_handling_result["game_paused"] == False :
+            # This case means confirming_quit was cancelled (N pressed), and no other menu is active
+            # and _handle_events wants to unpause.
+             new_game_paused_state = False
+             # time_at_pause and total_paused_duration are handled by _handle_events for 'N' key
+
+        game_paused = new_game_paused_state
         ai_mode_active = event_handling_result["ai_mode_active"]
         soft_drop_active = event_handling_result["soft_drop_active"]
         current_piece = event_handling_result["current_piece"]
@@ -840,14 +938,20 @@ def main():
         formatted_time = game_logic_result["formatted_time"]; game_phase = game_logic_result["game_phase_str"]
         lines_being_animated = game_logic_result["lines_being_animated"]; line_animation_timer = game_logic_result["line_animation_timer"]
         ai_mode_active = game_logic_result["ai_mode_active"];
-        game_paused = game_logic_result["game_paused"];
+
+        # Ensure game_paused state from game_logic_result is respected if not confirming quit
+        if not confirming_quit:
+            game_paused = game_logic_result["game_paused"]
+        # If confirming_quit is true, game_paused should remain true (or what _handle_events set it to)
+        # until confirming_quit becomes false.
 
         if game_over and not prev_game_over:
             is_top_score = len(top_scores_list) < 10 or (score > 0 and score > top_scores_list[-1].get("score",0))
             if score > 0 and is_top_score: game_phase = "GETTING_USERNAME"; current_username_input = ""
             else: game_phase = "HIGH_SCORE_DISPLAY"
 
-        _draw_game_screen(screen, game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, total_lines_cleared, lines_for_current_level, ai_mode_active, formatted_time, game_over, game_paused, clock, help_screen_active, help_text_surfaces, game_phase, current_username_input, top_scores_list, lines_being_animated, line_animation_timer, config_menu_active, sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, config_manager.get("grid_size","normal"), config_manager)
+        # Pass confirming_quit to _draw_game_screen
+        _draw_game_screen(screen, game_grid, current_piece, next_piece_1, next_piece_2, score, current_level, total_lines_cleared, lines_for_current_level, ai_mode_active, formatted_time, game_over, game_paused, clock, help_screen_active, help_text_surfaces, game_phase, current_username_input, top_scores_list, lines_being_animated, line_animation_timer, config_menu_active, sound_effects_enabled, shadow_enabled, line_blink_enabled, music_enabled, config_manager.get("grid_size","normal"), config_manager, confirming_quit)
 
     if background_music_loaded: pygame.mixer.music.stop()
     pygame.mixer.quit(); pygame.font.quit(); pygame.quit()
