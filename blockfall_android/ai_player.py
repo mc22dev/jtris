@@ -150,8 +150,9 @@ def find_best_move(grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_
 
                 # Now, consider the next_piece_1_obj
                 if next_piece_1_obj:
-                    best_future_score = -float('inf')
-                    # Iterate through all possible moves for next_piece_1_obj
+                    best_score_after_next_1 = -float('inf')
+                    best_grid_after_next_1 = None
+
                     for rotation_idx_next_1 in range(len(next_piece_1_obj.shape)):
                         temp_eval_piece_next_1 = Piece(0, 0, shape_type=next_piece_1_obj.shape_type,
                                                        is_valid_position_func=is_valid_position_func,
