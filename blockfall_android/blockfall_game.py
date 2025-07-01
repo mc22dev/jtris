@@ -206,7 +206,10 @@ def _process_ai_move(gs, play_sound_func, is_valid_position_func, piece_set_type
     if time.time() - gs.last_ai_move_time > AI_MOVE_DELAY:
         grid_copy_for_ai = ai_player.clone_grid(gs.game_grid)
         best_move_info = ai_player.find_best_move(
-            grid_copy_for_ai, gs.current_piece, gs.next_piece_1,
+            grid_copy_for_ai,
+            gs.current_piece,
+            gs.next_piece_1,
+            gs.next_piece_2,  # Pass next_piece_2
             is_valid_position_func=is_valid_position_func,
             play_sound_func=play_sound_func,
             piece_set_type=piece_set_type

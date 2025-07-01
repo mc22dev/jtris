@@ -108,9 +108,10 @@ def evaluate_board_state(grid, lines_cleared_by_move):
     score += HEURISTIC_WEIGHTS['bumpiness'] * bumpiness
     return score
 
-def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_position_func, play_sound_func, piece_set_type="standard"): # Added piece_set_type
+def find_best_move(grid_data, current_piece_obj, next_piece_1_obj, next_piece_2_obj, is_valid_position_func, play_sound_func, piece_set_type="standard"):
     """
-    Finds the best move (column and rotation) for the current piece.
+    Finds the best move (column and rotation) for the current piece,
+    considering the placement of the next piece.
     """
     best_score = -float('inf')
     best_x = -1
@@ -142,9 +143,46 @@ def find_best_move(grid_data, current_piece_obj, next_piece_obj, is_valid_positi
                 simulate_place_piece(grid_copy, current_piece_obj, x_col, rotation_idx, is_valid_position_func, play_sound_func)
 
             if is_possible:
-                current_move_score = evaluate_board_state(resulting_grid, lines_cleared)
-                if current_move_score > best_score:
-                    best_score = current_move_score
+                # Score for the current piece's placement
+                score_after_current_piece = evaluate_board_state(resulting_grid, lines_cleared)
+
+                current_total_score = score_after_current_piece
+
+                # Now, consider the next_piece_1_obj
+                if next_piece_1_obj:
+                    best_future_score = -float('inf')
+                    # Iterate through all possible moves for next_piece_1_obj
+                    for rotation_idx_next_1 in range(len(next_piece_1_obj.shape)):
+                        temp_eval_piece_next_1 = Piece(0, 0, shape_type=next_piece_1_obj.shape_type,
+                                                       is_valid_position_func=is_valid_position_func,
+                                                       play_sound_func=play_sound_func,
+                                                       piece_set_type=next_piece_1_obj.piece_set_type)
+                        temp_eval_piece_next_1.rotation = rotation_idx_next_1
+                        current_shape_blocks_next_1 = temp_eval_piece_next_1.shape[temp_eval_piece_next_1.rotation]
+                        min_c_offset_next_1 = 0
+                        max_c_offset_next_1 = 0
+                        if current_shape_blocks_next_1:
+                            min_c_offset_next_1 = min(c for r, c in current_shape_blocks_next_1)
+                            max_c_offset_next_1 = max(c for r, c in current_shape_blocks_next_1)
+
+                        for x_col_next_1 in range(-min_c_offset_next_1, game_constants.GRID_WIDTH - max_c_offset_next_1):
+                            # Simulate placing next_piece_1_obj on the 'resulting_grid' (grid after current_piece_obj)
+                            grid_after_current_piece_copy = clone_grid(resulting_grid)
+                            resulting_grid_next_1, lines_cleared_next_1, _, is_possible_next_1 = \
+                                simulate_place_piece(grid_after_current_piece_copy, next_piece_1_obj, x_col_next_1, rotation_idx_next_1, is_valid_position_func, play_sound_func)
+
+                            if is_possible_next_1:
+                                score_next_1_move = evaluate_board_state(resulting_grid_next_1, lines_cleared_next_1)
+                                if score_next_1_move > best_future_score:
+                                    best_future_score = score_next_1_move
+
+                    if best_future_score != -float('inf'):
+                        # Add the weighted score of the best outcome for next_piece_1_obj
+                        # The weight (e.g., 0.5) can be tuned. A smaller weight means less emphasis on future pieces.
+                        current_total_score += 0.5 * best_future_score
+
+                if current_total_score > best_score:
+                    best_score = current_total_score
                     best_x = x_col
                     best_rotation = rotation_idx
                     best_landing_y = landing_y
