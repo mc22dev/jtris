@@ -47,6 +47,7 @@ def load_font(size):
 SCORE_FONT = None; INFO_FONT = None; TITLE_FONT = None; GAME_OVER_FONT = None
 SOUND_EFFECTS = {"move": None, "rotate": None, "drop": None, "line_clear": None, "blockfall_clear": None, "level_up": None, "game_over": None}
 SOUND_DIR = "sounds"
+RESOURCES_DIR = "resources" # New directory for general resources
 sound_effects_enabled = True
 shadow_enabled = True
 line_blink_enabled = True
@@ -812,18 +813,52 @@ def main():
     top_scores_list = _load_best_score()
 
     background_music_loaded = False
-    if os.path.isdir(SOUND_DIR):
+    # Try to load music from the new resources directory
+    if os.path.isdir(RESOURCES_DIR):
         try:
-            music_path = os.path.join(SOUND_DIR, "background_01.mp3")
-            if os.path.exists(music_path): pygame.mixer.music.load(music_path); background_music_loaded = True
-        except pygame.error as e: print(f"DEBUG: Error loading music: {e}" if DEBUG_MODE else "")
+            music_path = os.path.join(RESOURCES_DIR, "background_music.mp3")
+            if os.path.exists(music_path):
+                pygame.mixer.music.load(music_path)
+                background_music_loaded = True
+                if DEBUG_MODE: print(f"DEBUG: Loaded background music from {music_path}")
+            else:
+                if DEBUG_MODE: print(f"DEBUG: Background music file not found at {music_path}")
+        except pygame.error as e:
+            print(f"DEBUG: Error loading music from {RESOURCES_DIR}: {e}" if DEBUG_MODE else "")
+    elif DEBUG_MODE:
+        print(f"DEBUG: Resources directory '{RESOURCES_DIR}' not found.")
 
-    if not os.path.isdir(SOUND_DIR): print(f"Sound directory '{SOUND_DIR}' not found.")
+    # Fallback to old sound directory if music not loaded and old directory exists
+    if not background_music_loaded and os.path.isdir(SOUND_DIR):
+        try:
+            music_path_old = os.path.join(SOUND_DIR, "background_01.mp3")
+            if os.path.exists(music_path_old):
+                pygame.mixer.music.load(music_path_old)
+                background_music_loaded = True
+                if DEBUG_MODE: print(f"DEBUG: Loaded background music from fallback {music_path_old}")
+            else:
+                if DEBUG_MODE: print(f"DEBUG: Fallback background music file not found at {music_path_old}")
+        except pygame.error as e:
+            print(f"DEBUG: Error loading music from {SOUND_DIR}: {e}" if DEBUG_MODE else "")
+    elif not background_music_loaded and DEBUG_MODE: # Only print if not already printed for RESOURCES_DIR
+        if not os.path.isdir(RESOURCES_DIR): # Avoid double message if both missing
+             print(f"DEBUG: Sound directory '{SOUND_DIR}' also not found.")
+
+
+    if not os.path.isdir(SOUND_DIR): print(f"Sound effects directory '{SOUND_DIR}' not found. Sound effects will be disabled.")
     else:
         for effect, filename in [("move","move.wav"), ("rotate","rotate.wav"), ("drop","drop.wav"), ("line_clear","line_clear.wav"), ("blockfall_clear","blockfall_clear.wav"), ("level_up","level_up.wav"), ("game_over","game_over.wav")]:
             SOUND_EFFECTS[effect] = load_sound(filename)
 
-    if background_music_loaded and music_enabled: pygame.mixer.music.set_volume(0.5); pygame.mixer.music.play(loops=-1)
+    if background_music_loaded and music_enabled:
+        pygame.mixer.music.set_volume(0.5) # Keep existing volume setting
+        pygame.mixer.music.play(loops=-1)
+        if DEBUG_MODE: print("DEBUG: Playing background music.")
+    elif not background_music_loaded and DEBUG_MODE:
+        print("DEBUG: Background music not loaded. Music will not play.")
+    elif not music_enabled and DEBUG_MODE:
+        print("DEBUG: Music is disabled in settings.")
+
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN); pygame.display.set_caption(SCREEN_TITLE)
     joystick = None; joystick_enabled = False
