@@ -22,11 +22,15 @@ pip install pygame
 (Or using the requirements.txt: `pip install -r requirements.txt`)
 
 ## Installation of Resources
-This project requires external resources like background music. To download these resources, run the install script:
+This project requires external resources like background music and game sounds. To download and generate these resources, run the install script:
 ```bash
 ./install_resources.sh
 ```
 Make sure the script is executable: `chmod +x install_resources.sh`.
+
+This script will:
+- Download background music to `resources/background_music.mp3`.
+- Generate default game sounds using `jukebox_sdk` into the `resources/sounds/` directory.
 
 ## How to Run (Desktop)
 1. Ensure you have Python and Pygame installed.
