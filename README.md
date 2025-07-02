@@ -29,8 +29,12 @@ This project requires external resources like background music and game sounds. 
 Make sure the script is executable: `chmod +x install_resources.sh`.
 
 This script will:
+- Check for and install `pip` if not present (using `apt-get`).
+- Check for and install `jukebox_sdk` using `pip` if not present.
 - Download background music to `resources/background_music.mp3`.
 - Generate default game sounds using `jukebox_sdk` into the `resources/sounds/` directory.
+
+**Note:** The script uses `sudo apt-get install` for `python3-pip` if `pip` is not found. This may require administrator privileges. If you prefer to install `pip` or `jukebox_sdk` manually, please do so before running the script.
 
 ## How to Run (Desktop)
 1. Ensure you have Python and Pygame installed.
