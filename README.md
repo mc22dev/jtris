@@ -29,12 +29,15 @@ This project requires external resources like background music and game sounds. 
 Make sure the script is executable: `chmod +x install_resources.sh`.
 
 This script will:
-- Check for and install `pip` if not present (using `apt-get`).
-- Check for and install `jukebox_sdk` using `pip` if not present.
+- Check for and install `python3-venv` if not present (using `apt-get`).
+- Create a local Python virtual environment in `.venv_jukebox/` if it doesn't exist.
+- Activate the virtual environment.
+- Install or verify `jukebox_sdk` within this local virtual environment using `pip`.
 - Download background music to `resources/background_music.mp3`.
-- Generate default game sounds using `jukebox_sdk` into the `resources/sounds/` directory.
+- Generate default game sounds using the virtual environment's `jukebox_sdk` into the `resources/sounds/` directory.
+- Deactivate the virtual environment.
 
-**Note:** The script uses `sudo apt-get install` for `python3-pip` if `pip` is not found. This may require administrator privileges. If you prefer to install `pip` or `jukebox_sdk` manually, please do so before running the script.
+**Note:** The script uses `sudo apt-get install` for `python3-venv` if the `venv` module is not found. This may require administrator privileges. If you prefer to install `python3-venv` manually, please do so before running the script. The `jukebox_sdk` and its dependencies will be installed locally within the `.venv_jukebox` directory and will not affect your global Python packages.
 
 ## How to Run (Desktop)
 1. Ensure you have Python and Pygame installed.
