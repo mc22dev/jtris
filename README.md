@@ -29,15 +29,28 @@ This project requires external resources like background music and game sounds. 
 Make sure the script is executable: `chmod +x install_resources.sh`.
 
 This script will:
-- Check for and install `python3-venv` if not present (using `apt-get`).
-- Create a local Python virtual environment in `.venv_jukebox/` if it doesn't exist.
-- Activate the virtual environment.
-- Install or verify `jukebox_sdk` within this local virtual environment using `pip`.
+- Attempt to create a Python virtual environment in `.venv_resources/` if it doesn't exist. You can use this virtual environment to install `jukebox_sdk` and other Python-based tools locally.
 - Download background music to `resources/background_music.mp3`.
-- Generate default game sounds using the virtual environment's `jukebox_sdk` into the `resources/sounds/` directory.
-- Deactivate the virtual environment.
+- Attempt to generate default game sounds using `jukebox_sdk` into the `resources/sounds/` directory.
 
-**Note:** The script uses `sudo apt-get install` for `python3-venv` if the `venv` module is not found. This may require administrator privileges. If you prefer to install `python3-venv` manually, please do so before running the script. The `jukebox_sdk` and its dependencies will be installed locally within the `.venv_jukebox` directory and will not affect your global Python packages.
+**Prerequisite: `jukebox_sdk` Installation**
+
+The `jukebox_sdk` tool is required to generate default game sounds. This script **does not** install `jukebox_sdk` automatically. You must ensure it is installed and accessible in your system's PATH or within the `.venv_resources` virtual environment (if you choose to use it).
+
+If `jukebox_sdk` is not found, the sound generation step will fail. Please refer to the documentation or source of `jukebox_sdk` for its specific installation instructions (e.g., `pip install <correct-package-name>`).
+
+**Using the Virtual Environment (Recommended):**
+1. After the script creates `.venv_resources/` (or if you create it manually: `python3 -m venv .venv_resources`), activate it:
+   ```bash
+   source .venv_resources/bin/activate
+   ```
+2. Install `jukebox_sdk` into this environment:
+   ```bash
+   pip install <name-of-jukebox_sdk-package>
+   ```
+3. Once `jukebox_sdk` is installed in the venv, running `./install_resources.sh` again should allow it to find and use this local version for sound generation when the venv is active, or you can modify the script to explicitly use the venv's python/jukebox_sdk. The current script calls `jukebox_sdk` directly, so it must be in PATH or the venv must be active when `install_resources.sh` is run.
+
+**Note:** The script may suggest installing `python3-venv` using `sudo apt-get` if the `venv` module for Python3 is not found. This is for creating the virtual environment and may require administrator privileges.
 
 ## How to Run (Desktop)
 1. Ensure you have Python and Pygame installed.
